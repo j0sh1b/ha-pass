@@ -107,7 +107,16 @@ async def security_headers(request: Request, call_next):
     response.headers["Referrer-Policy"] = "no-referrer"
     # All routes use strict nonce-based CSP (M-17: admin inline handlers
     # migrated to event delegation).
-    script_src = f"'self' 'nonce-{nonce}'"
+    # API docs needs CDN resources for Swagger UI
+    is_api_docs = request.url.path.endswith("/api/docs") or request.url.path.endswith("/api/docs/")
+    if is_api_docs:
+        script_src = f"'self' 'nonce-{nonce}' https://cdn.jsdelivr.net"
+        style_src = "'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net"
+        img_src = "'self' data: https://fastapi.tiangolo.com"
+    else:
+        script_src = f"'self' 'nonce-{nonce}'"
+        style_src = "'self' 'unsafe-inline' https://fonts.googleapis.com"
+        img_src = "'self' data:"
     if ingress_path:
         # Ingress loads inside HA iframe — allow framing from same origin
         frame_ancestors = "frame-ancestors 'self'"
@@ -117,9 +126,9 @@ async def security_headers(request: Request, call_next):
     csp = (
         f"default-src 'self'; "
         f"script-src {script_src}; "
-        f"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        f"style-src {style_src}; "
         f"font-src https://fonts.gstatic.com; "
-        f"img-src 'self' data:; "
+        f"img-src {img_src}; "
         f"connect-src 'self'; "
         f"{frame_ancestors}"
     )

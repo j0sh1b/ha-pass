@@ -262,6 +262,10 @@ async def test_swagger_docs_available_when_enabled_enabled(client: AsyncClient):
     response = await client.get("/api/docs")
     assert response.status_code == 200
     assert "swagger" in response.text.lower()
+    # CSP should allow CDN resources for Swagger UI
+    csp = response.headers.get("content-security-policy", "")
+    assert "https://cdn.jsdelivr.net" in csp, f"CSP should allow cdn.jsdelivr.net for API docs, got: {csp}"
+    assert "https://fastapi.tiangolo.com" in csp, f"CSP should allow fastapi.tiangolo.com for favicon, got: {csp}"
 
 
 @pytest.mark.skipif(
