@@ -20,3 +20,6 @@ configuration:
   guest_url:
     name: Guest URL
     description: "External base URL for guest links (e.g., https://guest.myhouse.com). Leave empty for local network."
+  encryption_key:
+    name: Encryption Key
+    description: "Generate with 'openssl rand -hex 32' in a terminal (64 hex characters required). Store this securely - loss of this key will invalidate all existing guest tokens."
