@@ -294,13 +294,18 @@ async def create_access_code(
     verification is needed. The access code can be used multiple
     times and by multiple devices.
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"[DEBUG] create_access_code called with token_id: {token_id}")
     row = await db.get_token_by_id(token_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     
     # Verify the token has a PIN (access code only works with PIN-protected tokens)
     token_pin = row["pin"] if "pin" in row.keys() else None
+    logger.info(f"[DEBUG] Token row found: id={row.get('id')}, has_pin={bool(token_pin)}")
     if not token_pin:
+        logger.warning(f"[DEBUG] Token {token_id} does not have a PIN")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Token does not have a PIN"
@@ -308,6 +313,7 @@ async def create_access_code(
     
     # Generate or regenerate access code
     code = await db.set_token_access_code(token_id)
+    logger.info(f"[DEBUG] Access code generated: {code[:8]}...")
     
     return {"access_code": code}
 
