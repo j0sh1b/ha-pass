@@ -1569,25 +1569,19 @@ document.addEventListener('click', e => {
     case 'copy-url-with-pin': {
       const url = el.dataset.url;
       const tokenId = el.dataset.tokenId;
-      console.log('[DEBUG] copy-url-with-pin clicked:', { url, tokenId, dataset: el.dataset });
       
       fetch(`${BASE}/admin/tokens/${tokenId}/access-code`, {
         method: 'POST',
         credentials: 'same-origin'
       })
       .then(r => {
-        console.log('[DEBUG] Copy fetch response:', { status: r.status, ok: r.ok });
         if (r.ok) return r.json();
         throw new Error('Failed to generate access link');
       })
       .then(data => {
-        console.log('[DEBUG] Access code received:', data);
-        const finalUrl = `${url}?c=${data.access_code}`;
-        console.log('[DEBUG] Copying URL:', finalUrl);
-        copyUrl(finalUrl);
+        copyUrl(`${url}?c=${data.access_code}`);
       })
       .catch(err => {
-        console.error('[DEBUG] Copy with PIN error:', err);
         alert(err.message || 'Failed to generate access link');
       });
       break;
@@ -1596,22 +1590,17 @@ document.addEventListener('click', e => {
     case 'show-qr-with-pin': {
       const url = el.dataset.url;
       const tokenId = el.dataset.tokenId;
-      console.log('[DEBUG] show-qr-with-pin clicked:', { url, tokenId, dataset: el.dataset });
       
       fetch(`${BASE}/admin/tokens/${tokenId}/access-code`, {
         method: 'POST',
         credentials: 'same-origin'
       })
       .then(r => {
-        console.log('[DEBUG] QR fetch response:', { status: r.status, ok: r.ok });
         if (r.ok) return r.json();
         throw new Error('Failed to generate QR code');
       })
       .then(data => {
-        console.log('[DEBUG] Access code received for QR:', data);
-        const finalUrl = `${url}?c=${data.access_code}`;
-        console.log('[DEBUG] Showing QR for URL:', finalUrl);
-        showQr(finalUrl);
+        showQr(`${url}?c=${data.access_code}`);
       })
       .catch(err => {
         alert(err.message || 'Failed to generate QR code');
