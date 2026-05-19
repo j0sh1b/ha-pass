@@ -84,11 +84,6 @@ async def lifespan(app: FastAPI):
 docs_url = "/api/docs" if settings.api_enabled else None
 openapi_url = "/api/openapi.json" if settings.api_enabled else None
 
-logger.info(
-    "FastAPI init - api_enabled=%s, docs_url=%s, openapi_url=%s",
-    settings.api_enabled, docs_url, openapi_url
-)
-
 app = FastAPI(
     title="HAPass",
     description="Home Access Token Management API" if settings.api_enabled else None,
@@ -103,30 +98,18 @@ _templates = Jinja2Templates(directory="templates")
 
 @app.middleware("http")
 async def set_root_path(request: Request, call_next):
-    """Set root_path for ingress so FastAPI generates correct URLs in Swagger UI.
+    """Set root_path for API docs when running under ingress.
     
-    This must run first to ensure root_path is set before any route handling.
-    NOTE: Do NOT set root_path for static file requests - it breaks StaticFiles path matching.
+    Only sets root_path for API docs routes to avoid breaking static file serving.
+    Must run before security_headers middleware.
     """
     ingress_path = get_ingress_path(request)
     request.state.ingress_path = ingress_path
     
-    # Debug logging for API docs requests
-    if "/openapi.json" in request.url.path or "/api/docs" in request.url.path:
-        logger.info(
-            "API docs request (set_root_path): path=%s, ingress_path=%s, current_root_path=%s",
-            request.url.path, ingress_path, request.scope.get("root_path", "NOT_SET")
-        )
-    
-    # Only set root_path for API/docs routes that need it for URL generation.
-    # Static file requests must NOT have root_path set - Starlette's StaticFiles
-    # relies on the raw path matching the mount path (/static/...).
-    # When root_path is set, StaticFiles strips it and looks for the wrong file path.
-    if ingress_path and not request.url.path.startswith(f"{ingress_path}/static/"):
-        logger.info("Setting root_path to: %s for path: %s", ingress_path, request.url.path)
+    # Only set root_path for API docs routes - static files must not have root_path set
+    if ingress_path and (request.url.path.endswith("/api/docs") or
+                         request.url.path.endswith("/openapi.json")):
         request.scope["root_path"] = ingress_path
-    elif ingress_path:
-        logger.info("NOT setting root_path for static file: %s", request.url.path)
     
     return await call_next(request)
 
@@ -135,11 +118,8 @@ async def set_root_path(request: Request, call_next):
 async def security_headers(request: Request, call_next):
     nonce = secrets.token_urlsafe(16)
     request.state.csp_nonce = nonce
-    # Re-detect ingress_path since request.state isn't shared between middleware
-    ingress_path = getattr(request.state, "ingress_path", None)
-    if ingress_path is None:
-        ingress_path = get_ingress_path(request)
-    
+    # Get ingress_path from request state (set by set_root_path middleware)
+    ingress_path = getattr(request.state, "ingress_path", "")
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "no-referrer"
@@ -179,37 +159,7 @@ async def security_headers(request: Request, call_next):
     return response
 
 
-# Wrap StaticFiles to add cache-control headers for ingress requests.
-# This prevents HA's ServiceWorker from caching static files and causing failures.
-from starlette.staticfiles import StaticFiles as BaseStaticFiles
-from starlette.types import Receive, Scope, Send
-
-class IngressAwareStaticFiles(BaseStaticFiles):
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        # Check if this is an ingress request
-        headers = scope.get("headers", [])
-        is_ingress = False
-        for name, value in headers:
-            if name.lower() == b"x-ingress-path":
-                is_ingress = True
-                break
-        
-        if is_ingress:
-            # Wrap send to add cache-control headers
-            original_send = send
-            async def send_with_cache_control(message):
-                if message["type"] == "http.response.start":
-                    headers = list(message.get("headers", []))
-                    # Prevent HA ServiceWorker from caching these files
-                    headers.append((b"cache-control", b"no-store, no-cache, must-revalidate"))
-                    headers.append((b"pragma", b"no-cache"))
-                    message["headers"] = headers
-                await original_send(message)
-            await super().__call__(scope, receive, send_with_cache_control)
-        else:
-            await super().__call__(scope, receive, send)
-
-app.mount("/static", IngressAwareStaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(admin.router)
 app.include_router(guest.router)
 
