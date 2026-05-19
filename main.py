@@ -84,6 +84,11 @@ async def lifespan(app: FastAPI):
 docs_url = "/api/docs" if settings.api_enabled else None
 openapi_url = "/api/openapi.json" if settings.api_enabled else None
 
+logger.info(
+    "FastAPI init - api_enabled=%s, docs_url=%s, openapi_url=%s",
+    settings.api_enabled, docs_url, openapi_url
+)
+
 app = FastAPI(
     title="HAPass",
     description="Home Access Token Management API" if settings.api_enabled else None,
@@ -97,11 +102,34 @@ _templates = Jinja2Templates(directory="templates")
 
 
 @app.middleware("http")
+async def set_root_path(request: Request, call_next):
+    """Set root_path for ingress so FastAPI generates correct URLs in Swagger UI.
+    
+    This must run first to ensure root_path is set before any route handling.
+    """
+    ingress_path = get_ingress_path(request)
+    request.state.ingress_path = ingress_path
+    
+    # Debug logging for API docs requests
+    if "/openapi.json" in request.url.path or "/api/docs" in request.url.path:
+        logger.info(
+            "API docs request (set_root_path): path=%s, ingress_path=%s, current_root_path=%s",
+            request.url.path, ingress_path, request.scope.get("root_path", "NOT_SET")
+        )
+    
+    if ingress_path:
+        logger.info("Setting root_path to: %s", ingress_path)
+        request.scope["root_path"] = ingress_path
+    
+    return await call_next(request)
+
+
+@app.middleware("http")
 async def security_headers(request: Request, call_next):
     nonce = secrets.token_urlsafe(16)
     request.state.csp_nonce = nonce
-    ingress_path = get_ingress_path(request)
-    request.state.ingress_path = ingress_path
+    ingress_path = request.state.ingress_path  # Already set by set_root_path
+    
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "no-referrer"
@@ -139,15 +167,6 @@ async def security_headers(request: Request, call_next):
     if "text/html" in content_type:
         response.headers["Cache-Control"] = "no-store"
     return response
-
-
-@app.middleware("http")
-async def set_root_path(request: Request, call_next):
-    """Set root_path for ingress so FastAPI generates correct URLs in Swagger UI."""
-    ingress_path = getattr(request.state, "ingress_path", "")
-    if ingress_path:
-        request.scope["root_path"] = ingress_path
-    return await call_next(request)
 
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
