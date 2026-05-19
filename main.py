@@ -106,6 +106,15 @@ async def set_root_path(request: Request, call_next):
     ingress_path = get_ingress_path(request)
     request.state.ingress_path = ingress_path
     
+    # Debug logging
+    if "/admin" in request.url.path or "/static" in request.url.path:
+        logger.info(
+            "INGRESS_DEBUG: path=%s ingress_path=%s supervisor=%s",
+            request.url.path,
+            ingress_path,
+            os.environ.get("SUPERVISOR_TOKEN", "NOT_SET")[:20] if os.environ.get("SUPERVISOR_TOKEN") else "NOT_SET"
+        )
+    
     # Only set root_path for API docs routes - static files must not have root_path set
     if ingress_path and (request.url.path.endswith("/api/docs") or
                          request.url.path.endswith("/openapi.json")):
