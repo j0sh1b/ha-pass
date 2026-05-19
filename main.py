@@ -106,6 +106,7 @@ async def set_root_path(request: Request, call_next):
     """Set root_path for ingress so FastAPI generates correct URLs in Swagger UI.
     
     This must run first to ensure root_path is set before any route handling.
+    NOTE: Do NOT set root_path for static file requests - it breaks StaticFiles path matching.
     """
     ingress_path = get_ingress_path(request)
     request.state.ingress_path = ingress_path
@@ -117,9 +118,15 @@ async def set_root_path(request: Request, call_next):
             request.url.path, ingress_path, request.scope.get("root_path", "NOT_SET")
         )
     
-    if ingress_path:
-        logger.info("Setting root_path to: %s", ingress_path)
+    # Only set root_path for API/docs routes that need it for URL generation.
+    # Static file requests must NOT have root_path set - Starlette's StaticFiles
+    # relies on the raw path matching the mount path (/static/...).
+    # When root_path is set, StaticFiles strips it and looks for the wrong file path.
+    if ingress_path and not request.url.path.startswith(f"{ingress_path}/static/"):
+        logger.info("Setting root_path to: %s for path: %s", ingress_path, request.url.path)
         request.scope["root_path"] = ingress_path
+    elif ingress_path:
+        logger.info("NOT setting root_path for static file: %s", request.url.path)
     
     return await call_next(request)
 
@@ -172,7 +179,37 @@ async def security_headers(request: Request, call_next):
     return response
 
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# Wrap StaticFiles to add cache-control headers for ingress requests.
+# This prevents HA's ServiceWorker from caching static files and causing failures.
+from starlette.staticfiles import StaticFiles as BaseStaticFiles
+from starlette.types import Receive, Scope, Send
+
+class IngressAwareStaticFiles(BaseStaticFiles):
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        # Check if this is an ingress request
+        headers = scope.get("headers", [])
+        is_ingress = False
+        for name, value in headers:
+            if name.lower() == b"x-ingress-path":
+                is_ingress = True
+                break
+        
+        if is_ingress:
+            # Wrap send to add cache-control headers
+            original_send = send
+            async def send_with_cache_control(message):
+                if message["type"] == "http.response.start":
+                    headers = list(message.get("headers", []))
+                    # Prevent HA ServiceWorker from caching these files
+                    headers.append((b"cache-control", b"no-store, no-cache, must-revalidate"))
+                    headers.append((b"pragma", b"no-cache"))
+                    message["headers"] = headers
+                await original_send(message)
+            await super().__call__(scope, receive, send_with_cache_control)
+        else:
+            await super().__call__(scope, receive, send)
+
+app.mount("/static", IngressAwareStaticFiles(directory="static"), name="static")
 app.include_router(admin.router)
 app.include_router(guest.router)
 
