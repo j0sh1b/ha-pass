@@ -127,8 +127,12 @@ async def set_root_path(request: Request, call_next):
 async def security_headers(request: Request, call_next):
     nonce = secrets.token_urlsafe(16)
     request.state.csp_nonce = nonce
-    # Get ingress_path from request state (set by set_root_path middleware)
-    ingress_path = getattr(request.state, "ingress_path", "")
+    # M-32: Get ingress_path directly - don't depend on set_root_path middleware
+    # because FastAPI runs middleware in reverse definition order
+    from app.ingress import get_ingress_path
+    ingress_path = get_ingress_path(request)
+    # Also set it in state for consistency with other code that checks request.state.ingress_path
+    request.state.ingress_path = ingress_path
     
     # Debug logging
     if "/admin" in request.url.path:
