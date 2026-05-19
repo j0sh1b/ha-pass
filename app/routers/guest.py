@@ -13,8 +13,8 @@ import time
 from typing import AsyncIterator
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Path, Query, Request, status
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, Path, Query, Request, status
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
 from app import database as db
@@ -28,6 +28,9 @@ from app.models import (
     NEVER_EXPIRES_SECONDS,
 )
 from app.rate_limiter import rate_limiter
+
+# Cookie name for guest PIN session
+GUEST_PIN_COOKIE = "ha_guest_pin_session"
 
 router = APIRouter(prefix="/g")
 logger = logging.getLogger(__name__)
@@ -250,10 +253,18 @@ async def guest_pwa(
     # Check if PIN is required and verify it
     token_pin = row["pin"] if "pin" in row.keys() else None
     if token_pin:
-        # Try to get PIN from query parameter
+        # Try to get PIN from query parameter (GET method with ?t= param)
         provided_pin = _decode_pin(t)
         
-        if provided_pin != token_pin:
+        # Also check for session-based PIN validation (POST method)
+        session_id = request.cookies.get(GUEST_PIN_COOKIE)
+        pin_session_valid = False
+        if session_id:
+            pin_session = await db.get_guest_pin_session(session_id)
+            if pin_session and pin_session["token_id"] == row["id"]:
+                pin_session_valid = True
+        
+        if provided_pin != token_pin and not pin_session_valid:
             # PIN is required but not provided or incorrect - show PIN entry page
             ctx = base_context(request)
             ctx.update({
@@ -280,6 +291,102 @@ async def guest_pwa(
         "never_expires": NEVER_EXPIRES_SECONDS,
     })
     return templates.TemplateResponse(request, "guest_pwa.html", ctx)
+
+
+# ---------------------------------------------------------------------------
+# POST PIN validation endpoint
+# ---------------------------------------------------------------------------
+
+@router.post("/{slug}/pin")
+async def validate_pin_post(
+    request: Request,
+    slug: str = Path(max_length=64),
+    pin: str = Form(..., max_length=20),
+):
+    """Validate PIN via POST request and create a session cookie.
+    
+    This is more secure than GET with query parameters because:
+    - PIN is not stored in browser history
+    - PIN is not visible in server access logs
+    - PIN is not leaked in referrer headers
+    """
+    row = await db.get_token_by_slug(slug)
+    now = int(time.time())
+    
+    if not row:
+        # Token not found - show expired page
+        ctx = base_context(request)
+        ctx.update({"slug": slug, "contact_message": settings.contact_message})
+        return templates.TemplateResponse(request, "expired.html", ctx, status_code=410)
+    
+    starts_at = row["starts_at"] if row["starts_at"] else row["created_at"]
+    
+    # Check if token hasn't started yet
+    if starts_at > now:
+        ctx = base_context(request)
+        ctx.update({
+            "slug": slug,
+            "contact_message": settings.contact_message,
+            "custom_message": row["pre_start_message"],
+            "starts_at": starts_at,
+        })
+        return templates.TemplateResponse(request, "pre_start.html", ctx, status_code=410)
+    
+    # Check if token is expired or revoked
+    if row["revoked"] or row["expires_at"] <= now:
+        ctx = base_context(request)
+        ctx.update({
+            "slug": slug,
+            "contact_message": settings.contact_message,
+            "custom_message": row["expired_message"],
+        })
+        return templates.TemplateResponse(request, "expired.html", ctx, status_code=410)
+    
+    try:
+        _enforce_ip_allowlist(row, request)
+    except HTTPException as exc:
+        ctx = base_context(request)
+        ctx.update({
+            "slug": slug,
+            "contact_message": settings.contact_message,
+            "custom_message": row["expired_message"],
+        })
+        return templates.TemplateResponse(request, "expired.html", ctx, status_code=exc.status_code)
+    
+    token_pin = row["pin"] if "pin" in row.keys() else None
+    
+    # If no PIN is required, just redirect to the PWA
+    if not token_pin:
+        return RedirectResponse(url=f"{request.state.ingress_path}/g/{slug}", status_code=status.HTTP_303_SEE_OTHER)
+    
+    # Validate the PIN
+    if pin != token_pin:
+        # PIN is incorrect - show PIN entry page with error
+        ctx = base_context(request)
+        ctx.update({
+            "slug": slug,
+            "contact_message": settings.contact_message,
+            "error": "Incorrect PIN",
+        })
+        return templates.TemplateResponse(request, "pin_entry.html", ctx, status_code=status.HTTP_401_UNAUTHORIZED)
+    
+    # PIN is correct - create a session
+    session_id = await db.create_guest_pin_session(row["id"])
+    
+    # Set cookie and redirect to PWA
+    response = RedirectResponse(
+        url=f"{request.state.ingress_path}/g/{slug}",
+        status_code=status.HTTP_303_SEE_OTHER
+    )
+    response.set_cookie(
+        GUEST_PIN_COOKIE,
+        session_id,
+        httponly=True,
+        secure=request.url.scheme == "https",
+        samesite="strict",
+        max_age=db.GUEST_PIN_SESSION_TTL,
+    )
+    return response
 
 
 # ---------------------------------------------------------------------------

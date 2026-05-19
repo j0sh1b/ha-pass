@@ -71,6 +71,46 @@ def _decrypt_pin_in_row(row: aiosqlite.Row) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Guest PIN sessions (for POST-based PIN validation)
+# ---------------------------------------------------------------------------
+
+# Guest PIN session lifetime - 24 hours
+GUEST_PIN_SESSION_TTL = 86400
+
+
+async def create_guest_pin_session(token_id: str) -> str:
+    """Create a new guest PIN session after successful PIN validation."""
+    db = await get_db()
+    session_id = uuid.uuid4().hex + uuid.uuid4().hex  # 64-char hex
+    now = int(time.time())
+    await db.execute(
+        """INSERT INTO guest_pin_sessions (id, token_id, created_at, expires_at)
+           VALUES (?, ?, ?, ?)""",
+        (session_id, token_id, now, now + GUEST_PIN_SESSION_TTL),
+    )
+    await db.commit()
+    return session_id
+
+
+async def get_guest_pin_session(session_id: str) -> aiosqlite.Row | None:
+    """Get a valid (non-expired) guest PIN session."""
+    db = await get_db()
+    async with db.execute(
+        """SELECT * FROM guest_pin_sessions
+           WHERE id = ? AND expires_at > ?""",
+        (session_id, int(time.time())),
+    ) as cur:
+        return await cur.fetchone()
+
+
+async def delete_guest_pin_session(session_id: str) -> None:
+    """Delete a guest PIN session (e.g., on logout)."""
+    db = await get_db()
+    await db.execute("DELETE FROM guest_pin_sessions WHERE id = ?", (session_id,))
+    await db.commit()
+
+
+# ---------------------------------------------------------------------------
 # Admin sessions
 # ---------------------------------------------------------------------------
 
@@ -321,7 +361,7 @@ async def list_access_logs(limit: int = 50) -> list[aiosqlite.Row]:
 
 
 async def cleanup_old_data(retention_days: int) -> None:
-    """Delete old access_log rows and expired admin sessions.
+    """Delete old access_log rows, expired admin sessions, and expired guest PIN sessions.
 
     Guest tokens are intentionally retained until an admin deletes them so
     expired or revoked links can be renewed with the same entities and slug.
@@ -331,4 +371,5 @@ async def cleanup_old_data(retention_days: int) -> None:
     cutoff = now - (retention_days * 86400)
     await db.execute("DELETE FROM access_log WHERE timestamp < ?", (cutoff,))
     await db.execute("DELETE FROM admin_sessions WHERE expires_at < ?", (now,))
+    await db.execute("DELETE FROM guest_pin_sessions WHERE expires_at < ?", (now,))
     await db.commit()

@@ -4,6 +4,7 @@ import base64
 import pytest
 
 from app.auth import SESSION_COOKIE
+from app.routers.guest import GUEST_PIN_COOKIE
 
 
 class TestTokenPinCreate:
@@ -279,3 +280,192 @@ class TestTokenPinQueryParameter:
             assert r.status_code == 200
             # Should allow access
             assert b"Enter PIN" not in r.content
+
+
+class TestTokenPinPostValidation:
+    """Tests for POST-based PIN validation (more secure than GET)."""
+
+    async def test_post_pin_validates_and_redirects(self, client, admin_session, mock_ha_client):
+        """POST with correct PIN creates session and redirects to PWA."""
+        r = await client.post(
+            "/admin/tokens",
+            json={
+                "label": "POST PIN Token",
+                "entity_ids": ["light.living_room"],
+                "expires_in_seconds": 86400,
+                "pin": "5678",
+            },
+            cookies=admin_session,
+        )
+        token = r.json()
+
+        # POST PIN to validation endpoint
+        r = await client.post(
+            f"/g/{token['slug']}/pin",
+            data={"pin": "5678"},
+            follow_redirects=False,
+        )
+        assert r.status_code == 303  # See Other redirect
+        assert f"/g/{token['slug']}" in r.headers.get("location", "")
+        # Should set session cookie
+        assert GUEST_PIN_COOKIE in r.cookies
+
+    async def test_post_pin_incorrect_shows_error(self, client, admin_session, mock_ha_client):
+        """POST with incorrect PIN shows PIN entry page with error."""
+        r = await client.post(
+            "/admin/tokens",
+            json={
+                "label": "POST PIN Token",
+                "entity_ids": ["light.living_room"],
+                "expires_in_seconds": 86400,
+                "pin": "5678",
+            },
+            cookies=admin_session,
+        )
+        token = r.json()
+
+        # POST wrong PIN
+        r = await client.post(
+            f"/g/{token['slug']}/pin",
+            data={"pin": "9999"},
+        )
+        assert r.status_code == 401
+        assert b"Enter PIN" in r.content
+        assert b"Incorrect PIN" in r.content
+
+    async def test_post_pin_creates_session_for_subsequent_requests(self, client, admin_session, mock_ha_client):
+        """After POST PIN validation, subsequent requests use session cookie."""
+        r = await client.post(
+            "/admin/tokens",
+            json={
+                "label": "Session PIN Token",
+                "entity_ids": ["light.living_room"],
+                "expires_in_seconds": 86400,
+                "pin": "1234",
+            },
+            cookies=admin_session,
+        )
+        token = r.json()
+
+        # First request: POST PIN
+        r = await client.post(
+            f"/g/{token['slug']}/pin",
+            data={"pin": "1234"},
+            follow_redirects=False,
+        )
+        assert r.status_code == 303
+        session_cookie = r.cookies.get(GUEST_PIN_COOKIE)
+        assert session_cookie is not None
+
+        # Second request: Access PWA with session cookie
+        r = await client.get(
+            f"/g/{token['slug']}",
+            cookies={GUEST_PIN_COOKIE: session_cookie},
+        )
+        assert r.status_code == 200
+        # Should show PWA, not PIN page
+        assert b"Enter PIN" not in r.content
+        assert b"Session PIN Token" in r.content or "cards-container" in r.text
+
+    async def test_post_pin_invalid_session_requires_revalidation(self, client, admin_session, mock_ha_client):
+        """Invalid/expired session cookie requires PIN re-entry."""
+        r = await client.post(
+            "/admin/tokens",
+            json={
+                "label": "PIN Token",
+                "entity_ids": ["light.living_room"],
+                "expires_in_seconds": 86400,
+                "pin": "1234",
+            },
+            cookies=admin_session,
+        )
+        token = r.json()
+
+        # Access with invalid session cookie
+        r = await client.get(
+            f"/g/{token['slug']}",
+            cookies={GUEST_PIN_COOKIE: "invalid_session_id"},
+        )
+        # Should show PIN entry page
+        assert r.status_code == 200
+        assert b"Enter PIN" in r.content
+
+    async def test_post_pin_to_wrong_slug_returns_expired(self, client, admin_session, mock_ha_client):
+        """POST PIN to non-existent slug returns expired page."""
+        r = await client.post(
+            "/g/nonexistent-slug/pin",
+            data={"pin": "1234"},
+        )
+        assert r.status_code == 410
+        assert b"Access unavailable" in r.content or b"expired" in r.content.lower()
+
+    async def test_post_pin_without_pin_token_redirects(self, client, admin_session, mock_ha_client):
+        """POST PIN to token without PIN requirement redirects directly."""
+        r = await client.post(
+            "/admin/tokens",
+            json={
+                "label": "No PIN Token",
+                "entity_ids": ["light.living_room"],
+                "expires_in_seconds": 86400,
+            },
+            cookies=admin_session,
+        )
+        token = r.json()
+
+        # POST to pin endpoint even though no PIN is required
+        r = await client.post(
+            f"/g/{token['slug']}/pin",
+            data={"pin": "anything"},
+            follow_redirects=False,
+        )
+        assert r.status_code == 303
+        assert f"/g/{token['slug']}" in r.headers.get("location", "")
+
+    async def test_post_pin_expired_token_shows_expired(self, client, admin_session, mock_ha_client):
+        """POST PIN to expired token shows expired message."""
+        r = await client.post(
+            "/admin/tokens",
+            json={
+                "label": "Expired Token",
+                "entity_ids": ["light.living_room"],
+                "expires_in_seconds": 1,
+                "expired_message": "Token expired!",
+                "pin": "1234",
+            },
+            cookies=admin_session,
+        )
+        token = r.json()
+
+        import asyncio
+        await asyncio.sleep(1.1)
+
+        r = await client.post(
+            f"/g/{token['slug']}/pin",
+            data={"pin": "1234"},
+        )
+        assert r.status_code == 410
+        assert b"Token expired!" in r.content
+
+    async def test_post_pin_pre_start_shows_pre_start(self, client, admin_session, mock_ha_client):
+        """POST PIN to pre-start token shows pre-start message."""
+        future_time = 4102444800 - 3600  # 1 hour before "never" timestamp
+        r = await client.post(
+            "/admin/tokens",
+            json={
+                "label": "Future Token",
+                "entity_ids": ["light.living_room"],
+                "expires_in_seconds": 86400,
+                "starts_at": future_time,
+                "pre_start_message": "Not started yet!",
+                "pin": "1234",
+            },
+            cookies=admin_session,
+        )
+        token = r.json()
+
+        r = await client.post(
+            f"/g/{token['slug']}/pin",
+            data={"pin": "1234"},
+        )
+        assert r.status_code == 410
+        assert b"Not started yet!" in r.content

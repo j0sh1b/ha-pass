@@ -43,13 +43,13 @@
     </div>
     {% endif %}
     
-    <form id="pin-form" method="GET" action="" class="space-y-4">
+    <form id="pin-form" method="POST" action="pin" class="space-y-4">
       <div>
         <label for="pin-input" class="sr-only">PIN</label>
-        <input 
-          id="pin-input" 
-          name="t" 
-          type="password" 
+        <input
+          id="pin-input"
+          name="pin"
+          type="password"
           inputmode="numeric"
           pattern="[0-9]*"
           autocomplete="off"
@@ -60,8 +60,8 @@
           {% if error %}autofocus{% endif %}
         >
       </div>
-      <button 
-        type="submit" 
+      <button
+        type="submit"
         class="w-full py-3 rounded-xl bg-primary hover:bg-primary-hover text-white font-display font-semibold text-sm transition-colors"
       >
         Access
@@ -78,21 +78,7 @@
 <script src="{{ base_path }}/static/theme.js"></script>
 <script>
   (function() {
-    const form = document.getElementById('pin-form');
     const input = document.getElementById('pin-input');
-    
-    // Encode the PIN using URL-safe base64 before submitting
-    form.addEventListener('submit', function(e) {
-      e.preventDefault();
-      const pin = input.value.trim();
-      if (!pin) return;
-      
-      // URL-safe base64 encode
-      const encoded = btoa(pin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-      
-      // Navigate with encoded PIN
-      window.location.href = window.location.pathname + '?t=' + encodeURIComponent(encoded);
-    });
     
     // Add shake animation on error
     {% if error %}
