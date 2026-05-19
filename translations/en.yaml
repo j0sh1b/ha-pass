@@ -23,3 +23,9 @@ configuration:
   encryption_key:
     name: Encryption Key
     description: "Generate with 'openssl rand -hex 32' in a terminal (64 hex characters required). Store this securely — loss of this key will make existing PINs unreadable."
+  api_enabled:
+    name: Enable API
+    description: Enable the REST API for external integrations
+  api_token:
+    name: API Token
+    description: Authentication token for API access (minimum 32 characters)

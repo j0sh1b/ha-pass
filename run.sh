@@ -17,6 +17,8 @@ mapping = {
     'brand_primary': 'BRAND_PRIMARY',
     'guest_url': 'GUEST_URL',
     'encryption_key': 'ENCRYPTION_KEY',
+    'api_enabled': 'API_ENABLED',
+    'api_token': 'API_TOKEN',
 }
 for key, env in mapping.items():
     val = opts.get(key, '')
