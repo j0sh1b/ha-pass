@@ -9,6 +9,7 @@ venv/
 dist/
 *.egg-info/
 node_modules/
+plans/
 
 # Generated at build time (Dockerfile runs generate_icons.py + tailwindcss)
 static/icons/

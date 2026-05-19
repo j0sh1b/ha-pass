@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Access Expired — {{ app_name }}{% endblock %}
+{% block title %}Access Not Yet Available — {{ app_name }}{% endblock %}
 
 {% block head_extra %}
 <meta name="theme-color" content="{{ brand_bg }}" media="(prefers-color-scheme: light)">
@@ -17,15 +17,24 @@
   </noscript>
   <div>
     <div class="w-20 h-20 rounded-full bg-soot/5 dark:bg-white/5 flex items-center justify-center mx-auto mb-6">
-      <span aria-hidden="true" class="material-symbols-outlined text-4xl text-muted">timer_off</span>
+      <span aria-hidden="true" class="material-symbols-outlined text-4xl text-muted">schedule</span>
     </div>
-    <h1 class="text-2xl font-serif tracking-tight mb-2">Access Expired</h1>
+    <h1 class="text-2xl font-serif tracking-tight mb-2">Access Not Yet Available</h1>
     {% if custom_message %}
     <p class="text-muted text-base leading-relaxed max-w-xs mx-auto whitespace-pre-wrap">{{ custom_message }}</p>
     {% else %}
-    <p class="text-muted text-base leading-relaxed max-w-xs mx-auto">This guest session has ended or the link is no longer valid. {{ contact_message }}</p>
+    <p class="text-muted text-base leading-relaxed max-w-xs mx-auto">This guest session has not started yet. Please check back later. {{ contact_message }}</p>
     {% endif %}
+    <p class="text-xs text-muted mt-6 font-mono" id="start-time" data-timestamp="{{ starts_at }}"></p>
   </div>
+  <script nonce="{{ csp_nonce }}">
+    (function() {
+      var el = document.getElementById('start-time');
+      var ts = parseInt(el.dataset.timestamp, 10) * 1000;
+      var date = new Date(ts);
+      el.textContent = 'Available from: ' + date.toLocaleString();
+    })();
+  </script>
 {% endblock %}
 
 {% block body_scripts %}

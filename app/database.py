@@ -16,6 +16,8 @@ from typing import Any
 import aiosqlite
 
 from app.config import settings
+from app.encryption import encrypt_pin, decrypt_pin
+
 logger = logging.getLogger(__name__)
 
 _db: aiosqlite.Connection | None = None
@@ -52,6 +54,20 @@ async def close_db() -> None:
         except Exception as exc:
             logger.warning("Error closing database: %s", exc)
         _db = None
+
+
+def _decrypt_pin_in_row(row: aiosqlite.Row) -> dict[str, Any]:
+    """Convert a row to dict and decrypt pin_encrypted to pin."""
+    row_dict = dict(row)
+    pin_encrypted = row_dict.pop("pin_encrypted", None)
+    if pin_encrypted:
+        try:
+            row_dict["pin"] = decrypt_pin(pin_encrypted)
+        except Exception:
+            row_dict["pin"] = None
+    else:
+        row_dict["pin"] = None
+    return row_dict
 
 
 # ---------------------------------------------------------------------------
@@ -95,11 +111,20 @@ async def create_token(
     entity_ids: list[str],
     expires_at: int,
     ip_allowlist: list[str] | None,
+    starts_at: int | None = None,
+    pre_start_message: str | None = None,
+    expired_message: str | None = None,
+    pin: str | None = None,
 ) -> dict[str, Any]:
     db = await get_db()
     token_id = str(uuid.uuid4())
     now = int(time.time())
     ip_json = json.dumps(ip_allowlist) if ip_allowlist else None
+    # Default starts_at to now if not provided
+    starts_at = starts_at if starts_at is not None else now
+
+    # Encrypt PIN if provided
+    pin_encrypted = encrypt_pin(pin) if pin else None
 
     # Deduplicate entity IDs
     entity_ids = list(dict.fromkeys(entity_ids))
@@ -108,14 +133,14 @@ async def create_token(
         await db.execute("BEGIN IMMEDIATE")
         await db.execute(
             """INSERT INTO tokens
-               (id, slug, label, created_at, expires_at, ip_allowlist)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (token_id, slug, label, now, expires_at, ip_json),
+               (id, slug, label, created_at, expires_at, ip_allowlist, starts_at, pre_start_message, expired_message, pin_encrypted)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (token_id, slug, label, now, expires_at, ip_json, starts_at, pre_start_message, expired_message, pin_encrypted),
         )
         if entity_ids:
             await db.executemany(
-                "INSERT INTO token_entities (token_id, entity_id) VALUES (?, ?)",
-                [(token_id, eid) for eid in entity_ids],
+                "INSERT INTO token_entities (token_id, entity_id, order_index) VALUES (?, ?, ?)",
+                [(token_id, eid, idx) for idx, eid in enumerate(entity_ids)],
             )
         await db.execute("COMMIT")
     except Exception:
@@ -124,19 +149,25 @@ async def create_token(
     return await get_token_by_id(token_id)  # type: ignore[return-value]
 
 
-async def get_token_by_slug(slug: str) -> aiosqlite.Row | None:
+async def get_token_by_slug(slug: str) -> dict[str, Any] | None:
     db = await get_db()
     async with db.execute("SELECT * FROM tokens WHERE slug = ?", (slug,)) as cur:
-        return await cur.fetchone()
+        row = await cur.fetchone()
+        if row is None:
+            return None
+        return _decrypt_pin_in_row(row)
 
 
-async def get_token_by_id(token_id: str) -> aiosqlite.Row | None:
+async def get_token_by_id(token_id: str) -> dict[str, Any] | None:
     db = await get_db()
     async with db.execute("SELECT * FROM tokens WHERE id = ?", (token_id,)) as cur:
-        return await cur.fetchone()
+        row = await cur.fetchone()
+        if row is None:
+            return None
+        return _decrypt_pin_in_row(row)
 
 
-async def list_tokens() -> list[aiosqlite.Row]:
+async def list_tokens() -> list[dict[str, Any]]:
     db = await get_db()
     async with db.execute(
         """SELECT t.*, COUNT(te.entity_id) AS entity_count
@@ -145,13 +176,14 @@ async def list_tokens() -> list[aiosqlite.Row]:
            GROUP BY t.id
            ORDER BY t.created_at DESC"""
     ) as cur:
-        return await cur.fetchall()
+        rows = await cur.fetchall()
+    return [_decrypt_pin_in_row(r) for r in rows]
 
 
 async def get_token_entities(token_id: str) -> list[str]:
     db = await get_db()
     async with db.execute(
-        "SELECT entity_id FROM token_entities WHERE token_id = ?", (token_id,)
+        "SELECT entity_id FROM token_entities WHERE token_id = ? ORDER BY order_index ASC", (token_id,)
     ) as cur:
         rows = await cur.fetchall()
     return [r["entity_id"] for r in rows]
@@ -159,14 +191,19 @@ async def get_token_entities(token_id: str) -> list[str]:
 
 async def update_token_entities(token_id: str, entity_ids: list[str]) -> None:
     db = await get_db()
-    # Deduplicate entity IDs
-    entity_ids = list(dict.fromkeys(entity_ids))
+    # Deduplicate entity IDs while preserving order
+    seen = set()
+    deduped = []
+    for eid in entity_ids:
+        if eid not in seen:
+            seen.add(eid)
+            deduped.append(eid)
     try:
         await db.execute("BEGIN IMMEDIATE")
         await db.execute("DELETE FROM token_entities WHERE token_id = ?", (token_id,))
         await db.executemany(
-            "INSERT INTO token_entities (token_id, entity_id) VALUES (?, ?)",
-            [(token_id, eid) for eid in entity_ids],
+            "INSERT INTO token_entities (token_id, entity_id, order_index) VALUES (?, ?, ?)",
+            [(token_id, eid, idx) for idx, eid in enumerate(deduped)],
         )
         await db.execute("COMMIT")
     except Exception:
@@ -179,6 +216,39 @@ async def update_token_expiry(token_id: str, expires_at: int) -> None:
     await db.execute(
         "UPDATE tokens SET expires_at = ? WHERE id = ?",
         (expires_at, token_id),
+    )
+    await db.commit()
+
+
+async def update_token_starts_at(token_id: str, starts_at: int) -> None:
+    db = await get_db()
+    await db.execute(
+        "UPDATE tokens SET starts_at = ? WHERE id = ?",
+        (starts_at, token_id),
+    )
+    await db.commit()
+
+
+async def update_token_messages(
+    token_id: str,
+    pre_start_message: str | None = None,
+    expired_message: str | None = None,
+) -> None:
+    db = await get_db()
+    await db.execute(
+        "UPDATE tokens SET pre_start_message = ?, expired_message = ? WHERE id = ?",
+        (pre_start_message, expired_message, token_id),
+    )
+    await db.commit()
+
+
+async def update_token_pin(token_id: str, pin: str | None = None) -> None:
+    db = await get_db()
+    # Encrypt PIN if provided, otherwise set to None
+    pin_encrypted = encrypt_pin(pin) if pin else None
+    await db.execute(
+        "UPDATE tokens SET pin_encrypted = ? WHERE id = ?",
+        (pin_encrypted, token_id),
     )
     await db.commit()
 

@@ -12,6 +12,8 @@ os.environ.setdefault("ADMIN_USERNAME", "testadmin")
 os.environ.setdefault("ADMIN_PASSWORD", "testpassword123")
 os.environ.setdefault("HA_BASE_URL", "http://localhost:8123")
 os.environ.setdefault("HA_TOKEN", "test-token")
+# Test encryption key (64 hex chars = 32 bytes) - generate with: openssl rand -hex 32
+os.environ.setdefault("ENCRYPTION_KEY", "7c4a8d09ca3762af61e59520943dc26494f8941b76b6b25fef0b9f0c56f1c4f2")
 
 import pytest
 import pytest_asyncio
@@ -121,3 +123,17 @@ async def sample_token(test_db):
         ip_allowlist=None,
     )
     return token
+
+
+@pytest_asyncio.fixture
+async def created_token(test_db):
+    """Create a test token and return just the ID for message tests."""
+    now = int(time.time())
+    token = await db.create_token(
+        label="Test Token",
+        slug="test-token-created",
+        entity_ids=["light.living_room"],
+        expires_at=now + 3600,
+        ip_allowlist=None,
+    )
+    return token["id"]

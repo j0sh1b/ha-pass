@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     brand_primary: str = "#D9523C"
     supervisor_token: str = ""
     guest_url: str = ""
+    encryption_key: str = Field(min_length=64, max_length=64, pattern=r"^[0-9a-fA-F]{64}$")
 
     @model_validator(mode="after")
     def _require_credentials_in_standalone(self):

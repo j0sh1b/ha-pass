@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block title %}Enter PIN — {{ app_name }}{% endblock %}
+
+{% block head_extra %}
+<meta name="theme-color" content="{{ brand_bg }}" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="{{ brand_bg_dark }}" media="(prefers-color-scheme: dark)">
+{% endblock %}
+
+{% block head_styles %}
+<style>
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+    20%, 40%, 60%, 80% { transform: translateX(5px); }
+  }
+  .shake { animation: shake 0.5s ease-in-out; }
+  input[type="password"]::-ms-reveal,
+  input[type="password"]::-ms-clear {
+    display: none;
+  }
+</style>
+{% endblock %}
+
+{% block body_attrs %}class="bg-bg-light dark:bg-bg-dark text-soot dark:text-gray-100 font-sans antialiased min-h-dvh flex items-center justify-center text-center p-8"{% endblock %}
+
+{% block body %}
+  <noscript>
+    <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem;text-align:center;font-family:sans-serif;">
+      <p>JavaScript is required to use this app.</p>
+    </div>
+  </noscript>
+  <div class="w-full max-w-sm">
+    <div class="w-20 h-20 rounded-full bg-accent/15 flex items-center justify-center mx-auto mb-6">
+      <span aria-hidden="true" class="material-symbols-outlined text-4xl text-accent">pin</span>
+    </div>
+    <h1 class="text-2xl font-serif tracking-tight mb-2">Enter PIN</h1>
+    <p class="text-muted text-sm leading-relaxed mb-6">This link requires a PIN to access.</p>
+    
+    {% if error %}
+    <div id="pin-error" class="mb-4 p-3 rounded-xl bg-primary/10 text-primary text-sm">
+      {{ error }}
+    </div>
+    {% endif %}
+    
+    <form id="pin-form" method="GET" action="" class="space-y-4">
+      <div>
+        <label for="pin-input" class="sr-only">PIN</label>
+        <input 
+          id="pin-input" 
+          name="t" 
+          type="password" 
+          inputmode="numeric"
+          pattern="[0-9]*"
+          autocomplete="off"
+          maxlength="20"
+          placeholder="Enter PIN"
+          required
+          class="w-full px-4 py-3 text-center text-2xl tracking-[0.5em] rounded-xl border border-border-light dark:border-border-dark bg-surface-light dark:bg-surface-dark outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+          {% if error %}autofocus{% endif %}
+        >
+      </div>
+      <button 
+        type="submit" 
+        class="w-full py-3 rounded-xl bg-primary hover:bg-primary-hover text-white font-display font-semibold text-sm transition-colors"
+      >
+        Access
+      </button>
+    </form>
+    
+    {% if contact_message %}
+    <p class="text-xs text-muted mt-6">{{ contact_message }}</p>
+    {% endif %}
+  </div>
+{% endblock %}
+
+{% block body_scripts %}
+<script src="{{ base_path }}/static/theme.js"></script>
+<script>
+  (function() {
+    const form = document.getElementById('pin-form');
+    const input = document.getElementById('pin-input');
+    
+    // Encode the PIN using URL-safe base64 before submitting
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      const pin = input.value.trim();
+      if (!pin) return;
+      
+      // URL-safe base64 encode
+      const encoded = btoa(pin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      
+      // Navigate with encoded PIN
+      window.location.href = window.location.pathname + '?t=' + encodeURIComponent(encoded);
+    });
+    
+    // Add shake animation on error
+    {% if error %}
+    input.classList.add('shake');
+    setTimeout(() => input.classList.remove('shake'), 500);
+    {% endif %}
+  })();
+</script>
+{% endblock %}

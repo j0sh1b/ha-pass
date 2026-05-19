@@ -22,6 +22,8 @@
     border-radius: inherit;
   }
   .sr-only { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border-width:0; }
+  /* Drag and drop styles */
+  .drag-over { background: rgb(var(--color-accent) / 0.1) !important; border: 2px dashed rgb(var(--color-accent) / 0.5) !important; }
 </style>
 {% endblock %}
 
@@ -175,6 +177,19 @@
         <p class="text-xs text-muted mt-1">Custom slugs are guessable. Use random slugs for external access.</p>
       </div>
       <div>
+        <label for="f-start" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">Start From <span class="text-muted/60 normal-case tracking-normal">(optional)</span></label>
+        <select id="f-start" data-action="toggle-custom-start" data-prefix="f"
+          class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary cursor-pointer">
+          <option value="now" selected>Immediately</option>
+          <option value="custom">Custom date/time...</option>
+        </select>
+        <div id="f-custom-start" class="hidden mt-2">
+          <input id="f-custom-start-datetime" type="datetime-local"
+            class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
+          <p id="f-custom-start-error" class="hidden text-xs text-primary mt-1">Start date must not be in the past.</p>
+        </div>
+      </div>
+      <div>
         <label for="f-expiry" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">Expiry</label>
         <select id="f-expiry" data-action="toggle-custom-expiry" data-prefix="f"
           class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary cursor-pointer">
@@ -200,6 +215,24 @@
         <label for="f-ip" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">IP Allowlist</label>
         <input id="f-ip" type="text" placeholder="192.168.1.0/24"
           class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
+      </div>
+      <div>
+        <label for="f-pre-start-msg" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">Pre-Start Message <span class="text-muted/60 normal-case tracking-normal">(optional)</span></label>
+        <textarea id="f-pre-start-msg" rows="2" placeholder="Shown when token hasn't started yet..."
+          class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 resize-none"></textarea>
+        <p class="text-xs text-muted mt-1">Shown before the start date. Leave empty for default message.</p>
+      </div>
+      <div>
+        <label for="f-expired-msg" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">Expired Message <span class="text-muted/60 normal-case tracking-normal">(optional)</span></label>
+        <textarea id="f-expired-msg" rows="2" placeholder="Shown when token has expired..."
+          class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 resize-none"></textarea>
+        <p class="text-xs text-muted mt-1">Shown when token expires or is revoked. Leave empty for default message.</p>
+      </div>
+      <div>
+        <label for="f-pin" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">PIN <span class="text-muted/60 normal-case tracking-normal">(optional)</span></label>
+        <input id="f-pin" type="text" maxlength="20" placeholder="e.g. 1234"
+          class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm font-mono outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
+        <p class="text-xs text-muted mt-1">Guests must enter this PIN to access. Leave empty for no PIN.</p>
       </div>
       <div>
         <label class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">Entities</label>
@@ -237,13 +270,26 @@
 <div class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-soot/40 dark:bg-black/50 backdrop-blur-sm" id="extend-modal">
   <div class="modal-animate bg-surface-light dark:bg-surface-dark border border-border-light dark:border-border-dark rounded-2xl p-6 w-full max-w-sm shadow-xl" role="dialog" aria-modal="true" aria-labelledby="extend-modal-title">
     <div class="flex items-center justify-between mb-3">
-      <h2 id="extend-modal-title" class="text-lg font-serif">Extend Expiry</h2>
+      <h2 id="extend-modal-title" class="text-lg font-serif">Expiry</h2>
       <button data-action="close-modal" data-modal="extend" aria-label="Close dialog" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-soot/5 dark:hover:bg-white/5 text-muted transition-colors">
         <span aria-hidden="true" class="material-symbols-outlined text-xl">close</span>
       </button>
     </div>
     <div id="extend-token-label" class="text-sm text-muted mb-4"></div>
     <div>
+      <label for="extend-start" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">Start From</label>
+      <select id="extend-start" data-action="toggle-custom-start" data-prefix="extend"
+        class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary cursor-pointer">
+        <option value="current">Current start time</option>
+        <option value="custom">Custom date/time...</option>
+      </select>
+      <div id="extend-custom-start" class="hidden mt-2">
+        <input id="extend-custom-start-datetime" type="datetime-local"
+          class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
+        <p id="extend-custom-start-error" class="hidden text-xs text-primary mt-1">Start date must not be in the past.</p>
+      </div>
+    </div>
+    <div class="mt-4">
       <label for="extend-duration" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">New Expiry (From Now)</label>
       <select id="extend-duration" data-action="toggle-custom-expiry" data-prefix="extend"
         class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary cursor-pointer">
@@ -269,7 +315,63 @@
     <div id="extend-error" role="alert" class="text-primary text-xs min-h-[18px] mt-2"></div>
     <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-border-light dark:border-border-dark">
       <button data-action="close-modal" data-modal="extend" class="px-4 py-2 text-sm font-display font-medium rounded-xl border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">Cancel</button>
-      <button id="extend-submit-btn" data-action="submit-extend" class="px-4 py-2 text-sm font-display font-semibold rounded-xl bg-primary hover:bg-primary-hover text-white transition-colors">Extend</button>
+      <button id="extend-submit-btn" data-action="submit-extend" class="px-4 py-2 text-sm font-display font-semibold rounded-xl bg-primary hover:bg-primary-hover text-white transition-colors">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Messages Modal -->
+<div class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-soot/40 dark:bg-black/50 backdrop-blur-sm" id="messages-modal">
+  <div class="modal-animate bg-surface-light dark:bg-surface-dark border border-border-light dark:border-border-dark rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-xl" role="dialog" aria-modal="true" aria-labelledby="messages-modal-title">
+    <div class="flex items-center justify-between mb-5">
+      <h2 id="messages-modal-title" class="text-lg font-serif">Edit Messages</h2>
+      <button data-action="close-modal" data-modal="messages" aria-label="Close dialog" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-soot/5 dark:hover:bg-white/5 text-muted transition-colors">
+        <span aria-hidden="true" class="material-symbols-outlined text-xl">close</span>
+      </button>
+    </div>
+    <div id="messages-token-label" class="text-sm text-muted mb-4"></div>
+    <div class="space-y-4">
+      <div>
+        <label for="msg-pre-start" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">Pre-Start Message <span class="text-muted/60 normal-case tracking-normal">(optional)</span></label>
+        <textarea id="msg-pre-start" rows="3" placeholder="Shown when token hasn't started yet..."
+          class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 resize-none"></textarea>
+        <p class="text-xs text-muted mt-1">Shown before the start date. Leave empty for default message.</p>
+      </div>
+      <div>
+        <label for="msg-expired" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">Expired Message <span class="text-muted/60 normal-case tracking-normal">(optional)</span></label>
+        <textarea id="msg-expired" rows="3" placeholder="Shown when token has expired..."
+          class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 resize-none"></textarea>
+        <p class="text-xs text-muted mt-1">Shown when token expires or is revoked. Leave empty for default message.</p>
+      </div>
+    </div>
+    <div id="messages-error" role="alert" class="text-primary text-xs min-h-[18px] mt-2"></div>
+    <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-border-light dark:border-border-dark">
+      <button data-action="close-modal" data-modal="messages" class="px-4 py-2 text-sm font-display font-medium rounded-xl border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">Cancel</button>
+      <button data-action="submit-messages" class="px-4 py-2 text-sm font-display font-semibold rounded-xl bg-primary hover:bg-primary-hover text-white transition-colors">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit PIN Modal -->
+<div class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-soot/40 dark:bg-black/50 backdrop-blur-sm" id="pin-modal">
+  <div class="modal-animate bg-surface-light dark:bg-surface-dark border border-border-light dark:border-border-dark rounded-2xl p-6 w-full max-w-sm shadow-xl" role="dialog" aria-modal="true" aria-labelledby="pin-modal-title">
+    <div class="flex items-center justify-between mb-5">
+      <h2 id="pin-modal-title" class="text-lg font-serif">PIN</h2>
+      <button data-action="close-modal" data-modal="pin" aria-label="Close dialog" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-soot/5 dark:hover:bg-white/5 text-muted transition-colors">
+        <span aria-hidden="true" class="material-symbols-outlined text-xl">close</span>
+      </button>
+    </div>
+    <div id="pin-token-label" class="text-sm text-muted mb-4"></div>
+    <div>
+      <label for="pin-input" class="block text-xs font-mono uppercase tracking-wider text-muted mb-1.5">PIN <span class="text-muted/60 normal-case tracking-normal">(optional)</span></label>
+      <input id="pin-input" type="text" maxlength="20" placeholder="Leave empty to remove PIN"
+        class="w-full px-3 py-2.5 rounded-xl border border-border-light dark:border-border-dark bg-bg-light dark:bg-bg-dark text-sm font-mono outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
+      <p class="text-xs text-muted mt-1">Guests must enter this PIN to access. Leave empty to remove.</p>
+    </div>
+    <div id="pin-error" role="alert" class="text-primary text-xs min-h-[18px] mt-2"></div>
+    <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-border-light dark:border-border-dark">
+      <button data-action="close-modal" data-modal="pin" class="px-4 py-2 text-sm font-display font-medium rounded-xl border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">Cancel</button>
+      <button data-action="submit-pin" class="px-4 py-2 text-sm font-display font-semibold rounded-xl bg-primary hover:bg-primary-hover text-white transition-colors">Save</button>
     </div>
   </div>
 </div>
@@ -329,8 +431,9 @@ let activityExpanded = false;
 const ACTIVITY_COLLAPSED_COUNT = 3;
 
 // Picker state (separate for create vs edit)
-let createPicker = { selected: new Set(), filter: 'all', search: '' };
-let editPicker = { selected: new Set(), filter: 'all', search: '' };
+// selected is now an array to preserve order
+let createPicker = { selected: [], filter: 'all', search: '' };
+let editPicker = { selected: [], filter: 'all', search: '' };
 let editTokenId = null;
 
 // ── Auth ──────────────────────────────────────────────────────────────
@@ -454,8 +557,10 @@ function toggleActivity() {
 
 function tokenStatus(t) {
   if (t.revoked) return 'revoked';
-  if (t.expires_at >= NEVER_EXPIRES) return 'active';
   const now = Date.now() / 1000;
+  const startsAt = t.starts_at || t.created_at;
+  if (startsAt > now) return 'scheduled';
+  if (t.expires_at >= NEVER_EXPIRES) return 'active';
   if (t.expires_at < now) return 'expired';
   if ((t.expires_at - now) < 3600) return 'expiring';
   return 'active';
@@ -482,7 +587,7 @@ function updateStats() {
   let active = 0, expired = 0;
   tokens.forEach(t => {
     const s = tokenStatus(t);
-    if (s === 'active' || s === 'expiring') active++;
+    if (s === 'active' || s === 'expiring' || s === 'scheduled') active++;
     else expired++;
   });
   document.getElementById('stat-active').textContent = active;
@@ -500,18 +605,19 @@ function renderTokens() {
     return;
   }
 
-  const order = { active: 0, expiring: 1, expired: 2, revoked: 3 };
+  const order = { active: 0, expiring: 1, scheduled: 2, expired: 3, revoked: 4 };
   const sorted = [...tokens].sort((a, b) => order[tokenStatus(a)] - order[tokenStatus(b)]);
 
   grid.innerHTML = sorted.map(t => {
     const status = tokenStatus(t);
     const url = guestLink(t.slug);
-    const isActive = status === 'active' || status === 'expiring';
+    const isActive = status === 'active' || status === 'expiring' || status === 'scheduled';
     const lastAccess = t.last_accessed ? relativeTime(t.last_accessed) : 'Never';
 
     const badges = {
       active: { label: 'Active', icon: 'circle', dotClass: 'pulse-dot text-ink', bgClass: 'bg-ink/10 text-ink' },
       expiring: { label: 'Expiring', icon: 'schedule', dotClass: 'text-amber-600', bgClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400' },
+      scheduled: { label: 'Scheduled', icon: 'event', dotClass: 'text-blue-500', bgClass: 'bg-blue-500/10 text-blue-500 dark:text-blue-400' },
       expired: { label: 'Expired', icon: 'timer_off', dotClass: 'text-muted', bgClass: 'bg-soot/5 dark:bg-white/5 text-muted' },
       revoked: { label: 'Revoked', icon: 'block', dotClass: 'text-muted', bgClass: 'bg-soot/5 dark:bg-white/5 text-muted' },
     };
@@ -543,7 +649,7 @@ function renderTokens() {
             <button data-id="${esc(t.id)}" data-action="duplicate-token" class="px-3 py-1.5 text-xs font-display font-medium rounded-lg border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors" title="Duplicate">
               <span aria-hidden="true" class="material-symbols-outlined text-sm">content_copy</span>
             </button>
-            <button data-id="${esc(t.id)}" data-label="${esc(t.label)}" data-status="${status}" data-action="open-extend-modal" class="px-3 py-1.5 text-xs font-display font-medium rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors" title="${expiryAction}">
+            <button data-id="${esc(t.id)}" data-label="${esc(t.label)}" data-status="${status}" data-starts-at="${t.starts_at || ''}" data-action="open-extend-modal" class="px-3 py-1.5 text-xs font-display font-medium rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors" title="${expiryAction}">
               <span aria-hidden="true" class="material-symbols-outlined text-sm">${expiryIcon}</span>
             </button>
             <button data-id="${esc(t.id)}" data-action="confirm-delete" class="px-3 py-1.5 text-xs font-display font-medium rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors" title="Delete">
@@ -580,17 +686,21 @@ function renderTokens() {
             <span aria-hidden="true" class="material-symbols-outlined text-base">timer</span>
             <span>Expires ${relativeTime(t.expires_at)}</span>
           </div>
-          <div class="flex items-center gap-2 text-muted">
+          ${status === 'scheduled' ? `<div class="flex items-center gap-2 text-muted">
+            <span aria-hidden="true" class="material-symbols-outlined text-base">event</span>
+            <span>Starts ${relativeTime(t.starts_at || t.created_at)}</span>
+          </div>` : `<div class="flex items-center gap-2 text-muted">
             <span aria-hidden="true" class="material-symbols-outlined text-base">history</span>
             <span>${esc(lastAccess)}</span>
-          </div>
+          </div>`}
           <div class="flex items-center gap-2 text-muted">
             <span aria-hidden="true" class="material-symbols-outlined text-base">lan</span>
             <span>${t.ip_allowlist ? esc(t.ip_allowlist.join(', ')) : 'Any IP'}</span>
           </div>
         </div>
 
-        <div class="grid grid-cols-3 gap-2">
+        <!-- Row 1: Copy | QR -->
+        <div class="grid grid-cols-2 gap-2">
           <button data-url="${esc(url)}" data-action="copy-url"
             class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">
             <span aria-hidden="true" class="material-symbols-outlined text-sm">content_copy</span> Copy
@@ -599,19 +709,51 @@ function renderTokens() {
             class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">
             <span aria-hidden="true" class="material-symbols-outlined text-sm">qr_code_2</span> QR
           </button>
+        </div>
+        <!-- Row 2: Copy with PIN | QR with PIN (disabled when no PIN) -->
+        <div class="grid grid-cols-2 gap-2 mt-2">
+          ${t.pin ? `<button data-url="${esc(url)}" data-pin="${esc(t.pin)}" data-action="copy-url-with-pin"
+            class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">vpn_key</span> Copy with PIN
+          </button>` : `<button disabled
+            class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark opacity-40 cursor-not-allowed">
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">vpn_key</span> Copy with PIN
+          </button>`}
+          ${t.pin ? `<button data-url="${esc(url)}" data-pin="${esc(t.pin)}" data-action="show-qr-with-pin"
+            class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">qr_code_2</span> QR with PIN
+          </button>` : `<button disabled
+            class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark opacity-40 cursor-not-allowed">
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">qr_code_2</span> QR with PIN
+          </button>`}
+        </div>
+        <!-- Row 3: Entities | Expiry -->
+        <div class="grid grid-cols-2 gap-2 mt-2">
           <button data-id="${esc(t.id)}" data-action="open-edit-modal"
             class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">
-            <span aria-hidden="true" class="material-symbols-outlined text-sm">edit</span> Edit
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">edit</span> Entities
+          </button>
+          <button data-id="${esc(t.id)}" data-label="${esc(t.label)}" data-status="${status}" data-starts-at="${t.starts_at || ''}" data-action="open-extend-modal"
+            class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium bg-accent/10 text-accent hover:bg-accent/20 transition-colors">
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">update</span> Expiry
           </button>
         </div>
-        <div class="grid grid-cols-3 gap-2 mt-2">
+        <!-- Row 4: Messages | Duplicate -->
+        <div class="grid grid-cols-2 gap-2 mt-2">
+          <button data-id="${esc(t.id)}" data-action="open-messages-modal"
+            class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">chat</span> Messages
+          </button>
           <button data-id="${esc(t.id)}" data-action="duplicate-token"
             class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">
             <span aria-hidden="true" class="material-symbols-outlined text-sm">content_copy</span> Duplicate
           </button>
-          <button data-id="${esc(t.id)}" data-label="${esc(t.label)}" data-status="${status}" data-action="open-extend-modal"
-            class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium bg-accent/10 text-accent hover:bg-accent/20 transition-colors">
-            <span aria-hidden="true" class="material-symbols-outlined text-sm">${expiryIcon}</span> ${expiryAction}
+        </div>
+        <!-- Row 5: Set PIN/Change PIN | Revoke -->
+        <div class="grid grid-cols-2 gap-2 mt-2">
+          <button data-id="${esc(t.id)}" data-action="open-pin-modal"
+            class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors ${t.pin ? 'border-accent text-accent' : ''}">
+            <span aria-hidden="true" class="material-symbols-outlined text-sm">${t.pin ? 'lock' : 'lock_open'}</span> ${t.pin ? 'Change PIN' : 'Set PIN'}
           </button>
           <button data-id="${esc(t.id)}" data-action="confirm-revoke"
             class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium text-primary border border-primary/20 hover:bg-primary/10 transition-colors">
@@ -630,11 +772,12 @@ async function loadEntities() {
 }
 
 // ── Entity Picker Component ───────────────────────────────────────────
-const PICKER_DOMAINS = ['all', 'light', 'switch', 'climate', 'lock', 'media_player', 'cover', 'fan', 'sensor', 'binary_sensor'];
+const PICKER_DOMAINS = ['all', 'light', 'switch', 'input_button', 'climate', 'lock', 'media_player', 'cover', 'fan', 'sensor', 'binary_sensor'];
 const PICKER_ICONS = { all: 'apps', ...DOMAIN_ICONS };
 
 function renderPicker(containerId, pickerState) {
   const container = document.getElementById(containerId);
+  const selectedSet = new Set(pickerState.selected);
   const filtered = allEntities.filter(e => {
     if (pickerState.filter !== 'all' && e.domain !== pickerState.filter) return false;
     if (pickerState.search) {
@@ -644,9 +787,11 @@ function renderPicker(containerId, pickerState) {
     return true;
   });
 
-  const selected = filtered.filter(e => pickerState.selected.has(e.entity_id));
-  const available = filtered.filter(e => !pickerState.selected.has(e.entity_id));
-  const allSelected = allEntities.filter(e => pickerState.selected.has(e.entity_id));
+  const selected = filtered.filter(e => selectedSet.has(e.entity_id));
+  const available = filtered.filter(e => !selectedSet.has(e.entity_id));
+  // Get all selected entities in their current order
+  const entityMap = new Map(allEntities.map(e => [e.entity_id, e]));
+  const allSelected = pickerState.selected.map(id => entityMap.get(id)).filter(Boolean);
 
   container.innerHTML = `
     <div class="flex flex-wrap gap-1.5 mb-3">
@@ -667,9 +812,12 @@ function renderPicker(containerId, pickerState) {
     </div>
     ${allSelected.length ? `
     <div class="mb-3">
-      <div class="text-[11px] font-mono font-bold uppercase tracking-wider text-muted mb-1.5 px-1">Selected (${allSelected.length})</div>
-      <ul class="picker-list max-h-44 overflow-y-auto border border-border-light dark:border-border-dark rounded-xl bg-surface-light dark:bg-surface-dark list-none" role="list">
-        ${allSelected.map(e => `<li class="flex items-center gap-3 px-3 py-2.5 border-b border-border-light dark:border-border-dark last:border-b-0 hover:bg-soot/[0.03] dark:hover:bg-white/5 cursor-pointer transition-colors" data-action="picker-remove" data-container="${containerId}" data-entity="${esc(e.entity_id)}" role="button" tabindex="0" aria-label="Remove ${esc(e.friendly_name || e.entity_id)}">
+      <div class="text-[11px] font-mono font-bold uppercase tracking-wider text-muted mb-1.5 px-1">Selected (${allSelected.length}) · Drag to reorder</div>
+      <ul class="picker-list max-h-44 overflow-y-auto border border-border-light dark:border-border-dark rounded-xl bg-surface-light dark:bg-surface-dark list-none" role="list" id="${containerId}-selected-list">
+        ${allSelected.map((e, index) => `<li class="flex items-center gap-3 px-3 py-2.5 border-b border-border-light dark:border-border-dark last:border-b-0 hover:bg-soot/[0.03] dark:hover:bg-white/5 cursor-move transition-colors"
+          data-action="picker-remove" data-container="${containerId}" data-entity="${esc(e.entity_id)}" data-index="${index}"
+          role="button" tabindex="0" aria-label="Remove ${esc(e.friendly_name || e.entity_id)}" draggable="true">
+          <span class="material-symbols-outlined text-muted text-base flex-shrink-0 cursor-grab" aria-hidden="true">drag_indicator</span>
           <div class="w-7 h-7 rounded-full ${DOMAIN_COLORS[e.domain]?.icon || 'bg-gray-500'} flex items-center justify-center flex-shrink-0">
             <span aria-hidden="true" class="material-symbols-outlined text-white text-sm">${PICKER_ICONS[e.domain] || 'devices'}</span>
           </div>
@@ -698,7 +846,80 @@ function renderPicker(containerId, pickerState) {
         ${!available.length ? `<li class="px-3 py-4 text-center text-xs text-muted">No matching entities</li>` : ''}
       </ul>
     </div>
-    <div class="text-xs text-muted text-right mt-1 font-mono">${pickerState.selected.size} selected</div>`;
+    <div class="text-xs text-muted text-right mt-1 font-mono">${pickerState.selected.length} selected</div>`;
+  
+  // Initialize drag-and-drop after rendering
+  initDragAndDrop(containerId, pickerState);
+}
+
+// Drag and drop state
+let dragSource = null;
+let dragSourceContainer = null;
+
+function initDragAndDrop(containerId, pickerState) {
+  const list = document.getElementById(`${containerId}-selected-list`);
+  if (!list) return;
+  
+  const items = list.querySelectorAll('li[draggable="true"]');
+  items.forEach(item => {
+    item.addEventListener('dragstart', handleDragStart);
+    item.addEventListener('dragend', handleDragEnd);
+    item.addEventListener('dragover', handleDragOver);
+    item.addEventListener('drop', handleDrop);
+    item.addEventListener('dragenter', handleDragEnter);
+    item.addEventListener('dragleave', handleDragLeave);
+  });
+}
+
+function handleDragStart(e) {
+  dragSource = this;
+  dragSourceContainer = this.dataset.container;
+  this.classList.add('opacity-50');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', this.dataset.index);
+}
+
+function handleDragEnd(e) {
+  this.classList.remove('opacity-50');
+  document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+  dragSource = null;
+  dragSourceContainer = null;
+}
+
+function handleDragOver(e) {
+  if (e.preventDefault) e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  return false;
+}
+
+function handleDragEnter(e) {
+  if (this !== dragSource && this.dataset.container === dragSourceContainer) {
+    this.classList.add('drag-over');
+  }
+}
+
+function handleDragLeave(e) {
+  this.classList.remove('drag-over');
+}
+
+function handleDrop(e) {
+  if (e.stopPropagation) e.stopPropagation();
+  
+  if (dragSource !== this && this.dataset.container === dragSourceContainer) {
+    const containerId = this.dataset.container;
+    const fromIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
+    const toIndex = parseInt(this.dataset.index, 10);
+    
+    // Reorder the array
+    const state = getPickerState(containerId);
+    const item = state.selected.splice(fromIndex, 1)[0];
+    state.selected.splice(toIndex, 0, item);
+    
+    // Re-render
+    renderPicker(containerId, state);
+  }
+  
+  return false;
 }
 
 function getPickerState(containerId) {
@@ -718,28 +939,39 @@ function setPickerSearch(containerId, val) {
 }
 
 function pickerAdd(containerId, entityId) {
-  getPickerState(containerId).selected.add(entityId);
-  renderPicker(containerId, getPickerState(containerId));
+  const state = getPickerState(containerId);
+  if (!state.selected.includes(entityId)) {
+    state.selected.push(entityId);
+  }
+  renderPicker(containerId, state);
 }
 
 function pickerRemove(containerId, entityId) {
-  getPickerState(containerId).selected.delete(entityId);
-  renderPicker(containerId, getPickerState(containerId));
+  const state = getPickerState(containerId);
+  state.selected = state.selected.filter(id => id !== entityId);
+  renderPicker(containerId, state);
 }
 
 // ── Create Token Modal ────────────────────────────────────────────────
 function openCreateModal(preset = {}) {
-  createPicker = { selected: new Set(preset.entityIds || []), filter: 'all', search: '' };
+  createPicker = { selected: [...(preset.entityIds || [])], filter: 'all', search: '' };
   document.getElementById('create-modal-title').textContent = preset.title || 'Create Guest Token';
   document.getElementById('f-label').value = preset.label || '';
   document.getElementById('f-slug').value = '';
   document.getElementById('f-ip').value = (preset.ipAllowlist || []).join(', ');
   document.getElementById('f-expiry').value = preset.expiryValue || '86400';
+  document.getElementById('f-start').value = 'now';
+  document.getElementById('f-pre-start-msg').value = preset.preStartMessage || '';
+  document.getElementById('f-expired-msg').value = preset.expiredMessage || '';
+  document.getElementById('f-pin').value = preset.pin || '';
   document.getElementById('create-error').textContent = '';
   document.getElementById('f-custom-expiry').classList.add('hidden');
   document.getElementById('f-never-warn').classList.add('hidden');
   document.getElementById('f-custom-error').classList.add('hidden');
   document.getElementById('f-custom-datetime').value = '';
+  document.getElementById('f-custom-start').classList.add('hidden');
+  document.getElementById('f-custom-start-error').classList.add('hidden');
+  document.getElementById('f-custom-start-datetime').value = '';
   toggleCustomExpiry('f');
   renderPicker('create-picker', createPicker);
   openModal('create-modal');
@@ -750,19 +982,28 @@ async function submitCreate() {
   const label = document.getElementById('f-label').value.trim();
   const slug = document.getElementById('f-slug').value.trim() || null;
   const expiresIn = getExpirySeconds('f');
+  const startsAt = getStartTimestamp('f');
   const ipRaw = document.getElementById('f-ip').value.trim();
   const ipList = ipRaw ? ipRaw.split(',').map(s => s.trim()).filter(Boolean) : null;
+  const preStartMsg = document.getElementById('f-pre-start-msg').value.trim() || null;
+  const expiredMsg = document.getElementById('f-expired-msg').value.trim() || null;
+  const pin = document.getElementById('f-pin').value.trim() || null;
   const errEl = document.getElementById('create-error');
 
   if (!label) { errEl.textContent = 'Label is required.'; return; }
   if (expiresIn === null) { errEl.textContent = 'Invalid expiry date. Must be in the future.'; return; }
-  if (createPicker.selected.size === 0) { errEl.textContent = 'Select at least one entity.'; return; }
+  if (startsAt === null && document.getElementById('f-start').value === 'custom') { errEl.textContent = 'Invalid start date.'; return; }
+  if (createPicker.selected.length === 0) { errEl.textContent = 'Select at least one entity.'; return; }
 
   const body = {
     label, slug,
-    entity_ids: [...createPicker.selected],
+    entity_ids: createPicker.selected,
     expires_in_seconds: expiresIn,
     ip_allowlist: ipList,
+    starts_at: startsAt,
+    pre_start_message: preStartMsg,
+    expired_message: expiredMsg,
+    pin,
   };
 
     const r = await fetch(`${BASE}/admin/tokens`, {
@@ -795,13 +1036,16 @@ async function duplicateToken(tokenId) {
     entityIds: token.entity_ids || [],
     ipAllowlist: token.ip_allowlist || [],
     expiryValue: token.expires_at === NEVER_EXPIRES ? String(NEVER_EXPIRES) : '86400',
+    preStartMessage: token.pre_start_message || '',
+    expiredMessage: token.expired_message || '',
+    pin: token.pin || '',
   });
 }
 
 // ── Edit Entities Modal ───────────────────────────────────────────────
 async function openEditModal(tokenId) {
   editTokenId = tokenId;
-  editPicker = { selected: new Set(), filter: 'all', search: '' };
+  editPicker = { selected: [], filter: 'all', search: '' };
   document.getElementById('edit-error').textContent = '';
   document.getElementById('edit-token-label').textContent = 'Loading...';
   document.getElementById('edit-picker').innerHTML = '<div class="text-center py-8 text-muted text-sm">Loading entities...</div>';
@@ -812,7 +1056,7 @@ async function openEditModal(tokenId) {
   const token = await r.json();
   document.getElementById('edit-token-label').textContent = `Editing: ${token.label}`;
   if (token.entity_ids) {
-    token.entity_ids.forEach(id => editPicker.selected.add(id));
+    editPicker.selected = [...token.entity_ids];
   }
   renderPicker('edit-picker', editPicker);
 }
@@ -821,12 +1065,12 @@ function closeEditModal() { closeModal('edit-modal'); editTokenId = null; docume
 async function submitEditEntities() {
   if (!editTokenId) return;
   const errEl = document.getElementById('edit-error');
-  if (editPicker.selected.size === 0) { errEl.textContent = 'Select at least one entity.'; return; }
+  if (editPicker.selected.length === 0) { errEl.textContent = 'Select at least one entity.'; return; }
 
   const r = await fetch(`${BASE}/admin/tokens/${editTokenId}/entities`, {
     method: 'PATCH',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ entity_ids: [...editPicker.selected] }),
+    body: JSON.stringify({ entity_ids: editPicker.selected }),
   });
 
   if (r.ok) {
@@ -842,22 +1086,29 @@ async function submitEditEntities() {
 
 // ── Extend Expiry Modal ───────────────────────────────────────────────
 let extendTokenId = null;
+let extendCurrentStartsAt = null;
 
-function openExtendModal(tokenId, label, status = 'active') {
+function openExtendModal(tokenId, label, status = 'active', currentStartsAt = null) {
   extendTokenId = tokenId;
-  const action = status === 'expired' || status === 'revoked' ? 'Renew' : 'Extend';
-  document.getElementById('extend-modal-title').textContent = `${action} Expiry`;
+  const action = status === 'expired' || status === 'revoked' ? 'Renew' : 'Update';
+  document.getElementById('extend-modal-title').textContent = 'Expiry';
   document.getElementById('extend-token-label').textContent = `${action}: ${label}`;
-  document.getElementById('extend-submit-btn').textContent = action;
+  document.getElementById('extend-submit-btn').textContent = 'Save';
   document.getElementById('extend-duration').value = '86400';
   document.getElementById('extend-error').textContent = '';
   document.getElementById('extend-custom-expiry').classList.add('hidden');
   document.getElementById('extend-never-warn').classList.add('hidden');
   document.getElementById('extend-custom-error').classList.add('hidden');
   document.getElementById('extend-custom-datetime').value = '';
+  // Reset start date selector
+  document.getElementById('extend-start').value = 'current';
+  document.getElementById('extend-custom-start').classList.add('hidden');
+  document.getElementById('extend-custom-start-error').classList.add('hidden');
+  document.getElementById('extend-custom-start-datetime').value = '';
+  extendCurrentStartsAt = currentStartsAt;
   openModal('extend-modal');
 }
-function closeExtendModal() { closeModal('extend-modal'); extendTokenId = null; }
+function closeExtendModal() { closeModal('extend-modal'); extendTokenId = null; extendCurrentStartsAt = null; }
 
 async function submitExtend() {
   if (!extendTokenId) return;
@@ -865,10 +1116,31 @@ async function submitExtend() {
   const errEl = document.getElementById('extend-error');
   if (seconds === null) { errEl.textContent = 'Invalid expiry date. Must be in the future.'; return; }
 
+  // Get starts_at value
+  let startsAt = null;
+  const startsAtSelect = document.getElementById('extend-start').value;
+  if (startsAtSelect === 'custom') {
+    const customStart = document.getElementById('extend-custom-start-datetime').value;
+    if (!customStart) {
+      errEl.textContent = 'Please select a start date/time.';
+      return;
+    }
+    const startTs = Math.floor(new Date(customStart).getTime() / 1000);
+    const now = Math.floor(Date.now() / 1000);
+    if (startTs < now) {
+      document.getElementById('extend-custom-start-error').classList.remove('hidden');
+      return;
+    }
+    startsAt = startTs;
+  }
+
+  const body = { expires_in_seconds: seconds };
+  if (startsAt !== null) body.starts_at = startsAt;
+
   const r = await fetch(`${BASE}/admin/tokens/${extendTokenId}/expiry`, {
     method: 'PATCH',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ expires_in_seconds: seconds }),
+    body: JSON.stringify(body),
   });
 
   if (r.ok) {
@@ -879,6 +1151,89 @@ async function submitExtend() {
   } else {
     const err = await r.json().catch(() => ({}));
     errEl.textContent = err.detail || 'Error updating expiry.';
+  }
+}
+
+// ── Edit Messages Modal ───────────────────────────────────────────────
+let editMessagesTokenId = null;
+
+async function openMessagesModal(tokenId) {
+  editMessagesTokenId = tokenId;
+  document.getElementById('messages-error').textContent = '';
+  document.getElementById('messages-token-label').textContent = 'Loading...';
+  document.getElementById('msg-pre-start').value = '';
+  document.getElementById('msg-expired').value = '';
+  openModal('messages-modal');
+
+  const r = await fetch(`${BASE}/admin/tokens/${tokenId}`);
+  if (!r.ok) { showToast('Failed to load token', 'error'); closeMessagesModal(); return; }
+  const token = await r.json();
+  document.getElementById('messages-token-label').textContent = `Editing: ${token.label}`;
+  document.getElementById('msg-pre-start').value = token.pre_start_message || '';
+  document.getElementById('msg-expired').value = token.expired_message || '';
+}
+
+function closeMessagesModal() { closeModal('messages-modal'); editMessagesTokenId = null; }
+
+async function submitMessages() {
+  if (!editMessagesTokenId) return;
+  const errEl = document.getElementById('messages-error');
+  const preStartMsg = document.getElementById('msg-pre-start').value.trim() || null;
+  const expiredMsg = document.getElementById('msg-expired').value.trim() || null;
+
+  const r = await fetch(`${BASE}/admin/tokens/${editMessagesTokenId}/messages`, {
+    method: 'PATCH',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ pre_start_message: preStartMsg, expired_message: expiredMsg }),
+  });
+
+  if (r.ok) {
+    closeMessagesModal();
+    showToast('Messages updated', 'success');
+    loadTokens();
+  } else {
+    const err = await r.json().catch(() => ({}));
+    errEl.textContent = err.detail || 'Error updating messages.';
+  }
+}
+
+// ── Edit PIN Modal ────────────────────────────────────────────────────
+let editPinTokenId = null;
+
+async function openPinModal(tokenId) {
+  editPinTokenId = tokenId;
+  document.getElementById('pin-error').textContent = '';
+  document.getElementById('pin-token-label').textContent = 'Loading...';
+  document.getElementById('pin-input').value = '';
+  openModal('pin-modal');
+
+  const r = await fetch(`${BASE}/admin/tokens/${tokenId}`);
+  if (!r.ok) { showToast('Failed to load token', 'error'); closePinModal(); return; }
+  const token = await r.json();
+  document.getElementById('pin-token-label').textContent = `Editing: ${token.label}`;
+  document.getElementById('pin-input').value = token.pin || '';
+}
+
+function closePinModal() { closeModal('pin-modal'); editPinTokenId = null; }
+
+async function submitPin() {
+  if (!editPinTokenId) return;
+  const errEl = document.getElementById('pin-error');
+  const pin = document.getElementById('pin-input').value.trim() || null;
+
+  const r = await fetch(`${BASE}/admin/tokens/${editPinTokenId}/pin`, {
+    method: 'PATCH',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ pin }),
+  });
+
+  if (r.ok) {
+    closePinModal();
+    showToast('PIN updated', 'success');
+    loadTokens();
+  } else {
+    const err = await r.json().catch(() => ({}));
+    errEl.textContent = err.detail || 'Error updating PIN.';
   }
 }
 
@@ -926,14 +1281,16 @@ function closeModal(id) {
   releaseFocus();
 }
 
-['create-modal', 'edit-modal', 'extend-modal', 'confirm-modal', 'qr-modal'].forEach(id => {
+['create-modal', 'edit-modal', 'extend-modal', 'messages-modal', 'confirm-modal', 'qr-modal', 'pin-modal'].forEach(id => {
   document.getElementById(id).addEventListener('click', e => {
     if (e.target === e.currentTarget) {
       if (id === 'create-modal') closeCreateModal();
       else if (id === 'edit-modal') closeEditModal();
       else if (id === 'extend-modal') closeExtendModal();
+      else if (id === 'messages-modal') closeMessagesModal();
       else if (id === 'confirm-modal') closeConfirmModal();
       else if (id === 'qr-modal') closeQrModal();
+      else if (id === 'pin-modal') closePinModal();
     }
   });
 });
@@ -994,6 +1351,44 @@ function getExpirySeconds(prefix) {
     return seconds;
   }
   return parseInt(select.value);
+}
+
+// ── Custom Start Date/Time ────────────────────────────────────────────
+function toggleCustomStart(prefix) {
+  const selectId = prefix + '-start';
+  const customId = prefix + '-custom-start';
+  const errorId = prefix + '-custom-start-error';
+  const select = document.getElementById(selectId);
+  const customDiv = document.getElementById(customId);
+  const errorEl = document.getElementById(errorId);
+  if (errorEl) errorEl.classList.add('hidden');
+  if (select.value === 'custom') {
+    customDiv.classList.remove('hidden');
+    const dt = new Date(Date.now() + 60000); // 1 minute from now
+    const input = customDiv.querySelector('input');
+    input.min = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    input.value = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  } else {
+    customDiv.classList.add('hidden');
+  }
+}
+
+function getStartTimestamp(prefix) {
+  const selectId = prefix + '-start';
+  const select = document.getElementById(selectId);
+  if (select.value === 'custom') {
+    const inputId = prefix + '-custom-start-datetime';
+    const errorId = prefix + '-custom-start-error';
+    const dt = new Date(document.getElementById(inputId).value);
+    if (isNaN(dt.getTime())) return null;
+    // Allow start time to be now or in the future
+    if (dt.getTime() < Date.now() - 60000) { // Allow 1 minute grace period
+      document.getElementById(errorId).classList.remove('hidden');
+      return null;
+    }
+    return Math.floor(dt.getTime() / 1000);
+  }
+  return null; // null means start immediately (defaults to now on backend)
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────
@@ -1069,6 +1464,13 @@ function showQr(url) {
   openModal('qr-modal');
 }
 
+function showQrWithPin(url, pin) {
+  // Encode PIN same as copy-url-with-pin
+  const encoded = btoa(pin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const urlWithPin = `${url}?t=${encoded}`;
+  showQr(urlWithPin);
+}
+
 function closeQrModal() { closeModal('qr-modal'); }
 
 // ── Escape Key Handler ────────────────────────────────────────────────
@@ -1077,9 +1479,11 @@ document.addEventListener('keydown', e => {
     const closers = {
       'qr-modal': closeQrModal,
       'confirm-modal': closeConfirmModal,
+      'messages-modal': closeMessagesModal,
       'extend-modal': closeExtendModal,
       'edit-modal': closeEditModal,
       'create-modal': closeCreateModal,
+      'pin-modal': closePinModal,
     };
     for (const [id, closer] of Object.entries(closers)) {
       const m = document.getElementById(id);
@@ -1140,8 +1544,16 @@ document.addEventListener('click', e => {
     case 'duplicate-token': duplicateToken(el.dataset.id); break;
 
     // Extend modal
-    case 'open-extend-modal': openExtendModal(el.dataset.id, el.dataset.label, el.dataset.status); break;
+    case 'open-extend-modal': openExtendModal(el.dataset.id, el.dataset.label, el.dataset.status, el.dataset.startsAt); break;
     case 'submit-extend': submitExtend(); break;
+
+    // Messages modal
+    case 'open-messages-modal': openMessagesModal(el.dataset.id); break;
+    case 'submit-messages': submitMessages(); break;
+
+    // PIN modal
+    case 'open-pin-modal': openPinModal(el.dataset.id); break;
+    case 'submit-pin': submitPin(); break;
 
     // Confirm modal
     case 'confirm-ok': {
@@ -1153,7 +1565,7 @@ document.addEventListener('click', e => {
 
     // Close any modal
     case 'close-modal': {
-      const modalMap = { create: closeCreateModal, edit: closeEditModal, extend: closeExtendModal, confirm: closeConfirmModal, qr: closeQrModal };
+      const modalMap = { create: closeCreateModal, edit: closeEditModal, extend: closeExtendModal, messages: closeMessagesModal, confirm: closeConfirmModal, qr: closeQrModal, pin: closePinModal };
       const closer = modalMap[el.dataset.modal];
       if (closer) closer();
       break;
@@ -1161,7 +1573,21 @@ document.addEventListener('click', e => {
 
     // Token actions
     case 'copy-url': copyUrl(el.dataset.url); break;
+    case 'copy-url-with-pin': {
+      const url = el.dataset.url;
+      const pin = el.dataset.pin;
+      // URL-safe base64 encode the PIN
+      const encoded = btoa(pin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      copyUrl(`${url}?t=${encoded}`);
+      break;
+    }
     case 'show-qr': showQr(el.dataset.url); break;
+    case 'show-qr-with-pin': {
+      const url = el.dataset.url;
+      const pin = el.dataset.pin;
+      showQrWithPin(url, pin);
+      break;
+    }
     case 'confirm-revoke': confirmRevoke(el.dataset.id); break;
     case 'confirm-delete': confirmDelete(el.dataset.id); break;
 
@@ -1185,6 +1611,9 @@ document.addEventListener('keydown', e => {
 document.addEventListener('change', e => {
   if (e.target.dataset.action === 'toggle-custom-expiry') {
     toggleCustomExpiry(e.target.dataset.prefix);
+  }
+  if (e.target.dataset.action === 'toggle-custom-start') {
+    toggleCustomStart(e.target.dataset.prefix);
   }
 });
 

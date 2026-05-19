@@ -18,6 +18,8 @@ from app.models import (
     TokenCreateRequest,
     TokenUpdateEntitiesRequest,
     TokenUpdateExpiryRequest,
+    TokenUpdateMessagesRequest,
+    TokenUpdatePinRequest,
 )
 from app.rate_limiter import RateLimiter
 
@@ -103,6 +105,10 @@ def _row_to_response(row: Any, entity_ids: list[str] | None = None) -> dict:
         "ip_allowlist": ip_list,
         "entity_count": count,
         "entity_ids": entity_ids,
+        "starts_at": row["starts_at"] if "starts_at" in row.keys() else row["created_at"],
+        "pre_start_message": row["pre_start_message"] if "pre_start_message" in row.keys() else None,
+        "expired_message": row["expired_message"] if "expired_message" in row.keys() else None,
+        "pin": row["pin"] if "pin" in row.keys() else None,
     }
 
 
@@ -169,6 +175,10 @@ async def create_token(
         entity_ids=body.entity_ids,
         expires_at=expires_at,
         ip_allowlist=body.ip_allowlist,
+        starts_at=body.starts_at,
+        pre_start_message=body.pre_start_message,
+        expired_message=body.expired_message,
+        pin=body.pin,
     )
     entity_ids = await db.get_token_entities(row["id"])
     return _row_to_response(row, entity_ids)
@@ -218,6 +228,9 @@ async def update_token_expiry(
     else:
         new_expires = int(time.time()) + body.expires_in_seconds
     await db.update_token_expiry(token_id, new_expires)
+    # Update starts_at if provided
+    if body.starts_at is not None:
+        await db.update_token_starts_at(token_id, body.starts_at)
     # Un-revoke if the token was revoked (admin is explicitly renewing it)
     if row["revoked"]:
         await db.unrevoke_token(token_id)
@@ -235,6 +248,38 @@ async def revoke_token(token_id: str, _: str = Depends(require_admin)) -> dict:
     if not row["revoked"]:
         await ha_client.broadcast_token_expired(token_id)
     return {"ok": True}
+
+
+@router.patch("/tokens/{token_id}/messages")
+async def update_token_messages(
+    token_id: str,
+    body: TokenUpdateMessagesRequest,
+    _: str = Depends(require_admin),
+) -> dict:
+    row = await db.get_token_by_id(token_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    await db.update_token_messages(
+        token_id,
+        pre_start_message=body.pre_start_message,
+        expired_message=body.expired_message,
+    )
+    row = await db.get_token_by_id(token_id)
+    return _row_to_response(row)
+
+
+@router.patch("/tokens/{token_id}/pin")
+async def update_token_pin(
+    token_id: str,
+    body: TokenUpdatePinRequest,
+    _: str = Depends(require_admin),
+) -> dict:
+    row = await db.get_token_by_id(token_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    await db.update_token_pin(token_id, pin=body.pin)
+    row = await db.get_token_by_id(token_id)
+    return _row_to_response(row)
 
 
 @router.delete("/tokens/{token_id}")

@@ -11,6 +11,7 @@ ALLOWED_SERVICES: dict[str, set[str]] = {
     "light":         {"turn_on", "turn_off", "toggle"},
     "switch":        {"turn_on", "turn_off", "toggle"},
     "input_boolean": {"turn_on", "turn_off", "toggle"},
+    "input_button":  {"press"},
     "climate":       {"set_temperature", "set_hvac_mode", "turn_on", "turn_off"},
     "lock":          {"lock", "unlock", "open"},
     "media_player":  {"media_play", "media_pause", "media_stop", "volume_set",
@@ -37,6 +38,10 @@ class TokenCreateRequest(BaseModel):
     entity_ids: list[str] = Field(..., min_length=1)
     expires_in_seconds: int = Field(..., gt=0)
     ip_allowlist: list[str] | None = None
+    starts_at: int | None = None  # Unix timestamp; defaults to now if not provided
+    pre_start_message: str | None = Field(default=None, max_length=1000)
+    expired_message: str | None = Field(default=None, max_length=1000)
+    pin: str | None = Field(default=None, max_length=20)
 
 
 class TokenUpdateEntitiesRequest(BaseModel):
@@ -45,6 +50,16 @@ class TokenUpdateEntitiesRequest(BaseModel):
 
 class TokenUpdateExpiryRequest(BaseModel):
     expires_in_seconds: int = Field(..., gt=0)
+    starts_at: int | None = None  # Optional start date timestamp
+
+
+class TokenUpdateMessagesRequest(BaseModel):
+    pre_start_message: str | None = Field(default=None, max_length=1000)
+    expired_message: str | None = Field(default=None, max_length=1000)
+
+
+class TokenUpdatePinRequest(BaseModel):
+    pin: str | None = Field(default=None, max_length=20)
 
 
 class CommandRequest(BaseModel):
@@ -64,3 +79,7 @@ class TokenResponse(BaseModel):
     ip_allowlist: list[str] | None
     entity_count: int
     entity_ids: list[str] | None = None
+    starts_at: int | None = None
+    pre_start_message: str | None = None
+    expired_message: str | None = None
+    pin: str | None = None

@@ -337,32 +337,28 @@ function renderAll() {
     return;
   }
 
-  const groups = {};
+  // Render entities in the order specified by the admin (from API)
+  let currentDomain = null;
+  let html = '';
+  
   for (const eid of entityOrder) {
     const domain = eid.split('.')[0];
-    if (!groups[domain]) groups[domain] = [];
-    groups[domain].push(eid);
-  }
-
-  const sortedDomains = Object.keys(groups).sort((a, b) => {
-    const ia = DOMAIN_ORDER.indexOf(a);
-    const ib = DOMAIN_ORDER.indexOf(b);
-    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
-  });
-
-  let html = '';
-  for (const domain of sortedDomains) {
-    const label = DOMAIN_LABELS[domain] || (domain.charAt(0).toUpperCase() + domain.slice(1));
-    const icon = DOMAIN_ICONS[domain] || 'devices';
-    const color = DOMAIN_COLORS[domain] || { text: 'text-muted' };
-    html += `<div class="flex items-center gap-2 pt-5 pb-2 px-1">
-      <span aria-hidden="true" class="material-symbols-outlined text-base ${color.text}">${icon}</span>
-      <span class="text-[11px] font-mono font-bold uppercase tracking-widest text-muted">${esc(label)}</span>
-    </div>`;
-    for (const eid of groups[domain]) {
-      html += buildCard(eid, states[eid]);
+    
+    // Show domain header when switching to a new domain
+    if (domain !== currentDomain) {
+      currentDomain = domain;
+      const label = DOMAIN_LABELS[domain] || (domain.charAt(0).toUpperCase() + domain.slice(1));
+      const icon = DOMAIN_ICONS[domain] || 'devices';
+      const color = DOMAIN_COLORS[domain] || { text: 'text-muted' };
+      html += `<div class="flex items-center gap-2 pt-5 pb-2 px-1">
+        <span aria-hidden="true" class="material-symbols-outlined text-base ${color.text}">${icon}</span>
+        <span class="text-[11px] font-mono font-bold uppercase tracking-widest text-muted">${esc(label)}</span>
+      </div>`;
     }
+    
+    html += buildCard(eid, states[eid]);
   }
+  
   container.innerHTML = html;
 }
 
@@ -380,6 +376,7 @@ function buildCard(eid, state) {
   let controls = '';
   if (domain === 'light') controls = buildLightControls(eid, state);
   else if (domain === 'switch' || domain === 'input_boolean') controls = '';
+  else if (domain === 'input_button') controls = buildButtonControls(eid);
   else if (domain === 'climate') controls = buildClimateControls(eid, state);
   else if (domain === 'lock') controls = buildLockControls(eid, state);
   else if (domain === 'media_player') controls = buildMediaControls(eid, state);
@@ -393,6 +390,13 @@ function buildCard(eid, state) {
     data-action="toggle" data-eid="${esc(eid)}" data-domain="${domain}"
     ></div>` : '';
 
+  const hasPressButton = domain === 'input_button';
+  const pressHtml = hasPressButton ? `<button data-action="press-button" data-eid="${esc(eid)}" data-domain="${domain}"
+    aria-label="Press ${esc(name)}"
+    class="px-4 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-display font-medium transition-colors active:scale-[0.98]">
+    Press
+  </button>` : '';
+
   return `<div class="bg-surface-light dark:bg-surface-dark rounded-2xl p-4 mb-2.5 shadow-card border border-border-light dark:border-border-dark ${opacityClass}" id="card-${cssId(eid)}">
     <div class="flex items-center gap-3">
       <div class="w-10 h-10 rounded-xl ${color.bg} flex items-center justify-center flex-shrink-0">
@@ -402,10 +406,14 @@ function buildCard(eid, state) {
         <div class="text-sm font-semibold truncate">${esc(name)}</div>
         <div class="text-xs text-muted" id="state-${cssId(eid)}">${formatState(domain, stateStr, state)}</div>
       </div>
-      ${toggleHtml}
+      ${toggleHtml}${pressHtml}
     </div>
     ${controls}
   </div>`;
+}
+
+function buildButtonControls(eid) {
+  return '';  // input_button has no additional controls
 }
 
 function formatState(domain, stateStr, state) {
@@ -426,6 +434,9 @@ function formatState(domain, stateStr, state) {
     const pct = state.attributes?.percentage;
     if (stateStr === 'on' && pct != null) return `On · ${pct}%`;
     return esc(stateStr === 'on' ? 'On' : stateStr === 'off' ? 'Off' : stateStr);
+  }
+  if (domain === 'input_button') {
+    return 'Tap to trigger';
   }
   if (domain === 'sensor') {
     const unit = state.attributes?.unit_of_measurement;
@@ -915,6 +926,13 @@ document.addEventListener('click', e => {
       break;
     case 'cover-cmd':
       sendCmd(eid, 'cover', el.dataset.service);
+      break;
+    case 'press-button':
+      sendCmd(eid, el.dataset.domain, 'press');
+      // Visual feedback - brief pulse animation
+      const btn = el;
+      btn.classList.add('opacity-70');
+      setTimeout(() => btn.classList.remove('opacity-70'), 150);
       break;
     case 'close-sheet':
       closeSheet();

@@ -4,6 +4,7 @@
 # operations require the slug in the URL path (not a cookie). The admin
 # dashboard uses SameSite=strict cookies for CSRF protection.
 import asyncio
+import base64
 import ipaddress
 import json
 import logging
@@ -12,7 +13,7 @@ import time
 from typing import AsyncIterator
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Path, Request, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Path, Query, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
@@ -100,6 +101,12 @@ async def _validate_token(slug: str, request: Request):
         raise HTTPException(status_code=status.HTTP_410_GONE, detail="Access unavailable")
 
     now = int(time.time())
+    
+    # Check if token has started yet
+    starts_at = row["starts_at"] if row["starts_at"] else row["created_at"]
+    if starts_at > now:
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail="Access not yet available")
+    
     if row["revoked"] or row["expires_at"] <= now:
         raise HTTPException(status_code=status.HTTP_410_GONE, detail="Access unavailable")
 
@@ -174,24 +181,88 @@ def _schedule_page_load_activity(background_tasks: BackgroundTasks, row) -> None
 # PWA shell
 # ---------------------------------------------------------------------------
 
-@router.get("/{slug}", response_class=HTMLResponse)
-async def guest_pwa(background_tasks: BackgroundTasks, request: Request, slug: str = Path(max_length=64)):
-    row = await db.get_token_by_slug(slug)
-    expired = False
-    if not row or row["revoked"] or row["expires_at"] <= int(time.time()):
-        expired = True
+def _decode_pin(encoded_pin: str | None) -> str | None:
+    """Decode URL-safe base64 encoded PIN, fallback to plaintext."""
+    if not encoded_pin:
+        return None
+    original = encoded_pin  # Keep original for plaintext fallback
+    try:
+        # Add padding if necessary
+        padding = 4 - len(encoded_pin) % 4
+        if padding != 4:
+            encoded_pin += '=' * padding
+        decoded = base64.urlsafe_b64decode(encoded_pin).decode('utf-8')
+        return decoded
+    except Exception:
+        # Not valid base64, return original unmodified input (plaintext fallback for non-JS users)
+        return original
 
-    if expired:
+
+@router.get("/{slug}", response_class=HTMLResponse)
+async def guest_pwa(
+    background_tasks: BackgroundTasks,
+    request: Request,
+    slug: str = Path(max_length=64),
+    t: str | None = Query(default=None, description="Encoded PIN for direct access"),
+):
+    row = await db.get_token_by_slug(slug)
+    now = int(time.time())
+    
+    if not row:
         ctx = base_context(request)
         ctx.update({"slug": slug, "contact_message": settings.contact_message})
+        return templates.TemplateResponse(request, "expired.html", ctx, status_code=410)
+    
+    starts_at = row["starts_at"] if row["starts_at"] else row["created_at"]
+    
+    # Check if token hasn't started yet (pre-start state) - bypass PIN check
+    if starts_at > now:
+        ctx = base_context(request)
+        ctx.update({
+            "slug": slug,
+            "contact_message": settings.contact_message,
+            "custom_message": row["pre_start_message"],
+            "starts_at": starts_at,
+        })
+        return templates.TemplateResponse(request, "pre_start.html", ctx, status_code=410)
+    
+    # Check if token is expired or revoked - bypass PIN check
+    if row["revoked"] or row["expires_at"] <= now:
+        ctx = base_context(request)
+        ctx.update({
+            "slug": slug,
+            "contact_message": settings.contact_message,
+            "custom_message": row["expired_message"],
+        })
         return templates.TemplateResponse(request, "expired.html", ctx, status_code=410)
 
     try:
         _enforce_ip_allowlist(row, request)
     except HTTPException as exc:
         ctx = base_context(request)
-        ctx.update({"slug": slug, "contact_message": settings.contact_message})
+        ctx.update({
+            "slug": slug,
+            "contact_message": settings.contact_message,
+            "custom_message": row["expired_message"],
+        })
         return templates.TemplateResponse(request, "expired.html", ctx, status_code=exc.status_code)
+    
+    # Check if PIN is required and verify it
+    token_pin = row["pin"] if "pin" in row.keys() else None
+    if token_pin:
+        # Try to get PIN from query parameter
+        provided_pin = _decode_pin(t)
+        
+        if provided_pin != token_pin:
+            # PIN is required but not provided or incorrect - show PIN entry page
+            ctx = base_context(request)
+            ctx.update({
+                "slug": slug,
+                "contact_message": settings.contact_message,
+                "error": "Incorrect PIN" if t else None,
+            })
+            return templates.TemplateResponse(request, "pin_entry.html", ctx)
+    
     await db.touch_token(row["id"])
     await db.log_access(
         token_id=row["id"],

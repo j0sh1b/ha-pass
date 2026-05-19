@@ -18,14 +18,45 @@ installs, just a link.
   <img src="docs/guest-pwa.png" width="250" alt="Guest PWA">
 </p>
 
+## How Guest Links Work
+
+1. In the admin dashboard, create an **access token** with:
+   - Selected entities the guest can control
+   - Optional **PIN protection** for extra security
+   - Optional **custom messages** for pre-start and expired states
+   - An optional **Start From** date/time (for future access)
+   - An **Expiry** date/time
+2. Share the generated link (`http://<your-ha-ip>:5880/g/{slug}`) with your guest.
+3. The guest opens the link on their phone. No app install or HA account needed.
+4. If the token has a PIN set, the guest must enter it (or use a link with `?t={encoded_pin}`).
+5. If the token has a future start time, the guest sees a "not yet available" message (or your custom message) until that time.
+6. When the token expires, the guest sees the contact message (or your custom message) and can no longer control devices.
+
+### Token Statuses
+
+In the admin dashboard, tokens display one of these statuses:
+
+| Status | Meaning |
+|--------|---------|
+| **Scheduled** | Token has a future start time; not yet active |
+| **Active** | Token is currently valid and can be used |
+| **Expiring** | Token expires within 1 hour |
+| **Expired** | Token has passed its expiry time |
+| **Revoked** | Token was manually revoked by an admin |
+
 ## Features
 
 - **Scoped guest tokens** — each token grants access to a specific set of entities
+- **PIN protection** — optionally require a PIN for guest access
+- **QR codes with PIN** — generate QR codes that include embedded PIN for instant access
+- **Custom entity ordering** — drag-and-drop to reorder how entities appear on the guest page
+- **Custom messages** — personalize the messages guests see before/after token validity
 - **Time-limited access** — tokens auto-expire after a configurable duration
+- **Scheduled start time** — create tokens that become active at a future date/time
 - **Real-time updates** — SSE-powered live state changes with automatic reconnect
 - **Installable PWA** — guests can add it to their home screen for an app-like experience
 - **Dark mode** — system-aware with manual override
-- **Admin dashboard** — create, revoke, extend, and monitor tokens
+- **Admin dashboard** — create, revoke, extend, and monitor tokens with an intuitive 5-row action layout
 - **Recent activity** — see guest link opens and commands in the admin dashboard
 - **Service allowlist** — only safe services (toggle, set_temperature, etc.) are permitted
 - **Rate limiting** — 30 req/min per token
@@ -38,7 +69,7 @@ installs, just a link.
 1. Add this repository in **Settings → Add-ons → Add-on Store → ⋮ → Repositories**:
 
    ```
-   https://github.com/rohithkadaveru/ha-pass
+   https://github.com/j0sh1b/ha-pass
    ```
 
 2. Find **HAPass** in the store and click **Install**.
@@ -55,7 +86,7 @@ don't need HA accounts.
 ```yaml
 services:
   ha-pass:
-    image: ghcr.io/rohithkadaveru/ha-pass:latest
+    image: ghcr.io/j0sh1b/ha-pass:latest
     restart: unless-stopped
     ports:
       - 5880:5880
@@ -82,7 +113,7 @@ docker run -d --restart unless-stopped \
   -e ADMIN_PASSWORD=changeme \
   -e HA_BASE_URL=http://homeassistant.local:8123 \
   -e HA_TOKEN=your_long_lived_token_here \
-  ghcr.io/rohithkadaveru/ha-pass:latest
+  ghcr.io/j0sh1b/ha-pass:latest
 ```
 
 The admin dashboard is at `http://localhost:5880/admin/dashboard`.

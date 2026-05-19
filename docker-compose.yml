@@ -1,6 +1,6 @@
 services:
   ha-pass:
-    image: ghcr.io/rohithkadaveru/ha-pass:latest
+    image: ghcr.io/j0sh1b/ha-pass:latest
     restart: unless-stopped
     ports:
       - 5880:5880
