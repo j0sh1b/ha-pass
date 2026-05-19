@@ -1571,7 +1571,7 @@ document.addEventListener('click', e => {
       const tokenId = el.dataset.tokenId;
       console.log('[DEBUG] copy-url-with-pin clicked:', { url, tokenId, dataset: el.dataset });
       
-      fetch(`${BASE_PATH}/admin/tokens/${tokenId}/access-code`, {
+      fetch(`${BASE}/admin/tokens/${tokenId}/access-code`, {
         method: 'POST',
         credentials: 'same-origin'
       })
@@ -1598,7 +1598,7 @@ document.addEventListener('click', e => {
       const tokenId = el.dataset.tokenId;
       console.log('[DEBUG] show-qr-with-pin clicked:', { url, tokenId, dataset: el.dataset });
       
-      fetch(`${BASE_PATH}/admin/tokens/${tokenId}/access-code`, {
+      fetch(`${BASE}/admin/tokens/${tokenId}/access-code`, {
         method: 'POST',
         credentials: 'same-origin'
       })
@@ -1622,7 +1622,7 @@ document.addEventListener('click', e => {
       const tokenId = el.dataset.tokenId;
       if (!confirm('Revoke access link? Anyone with the link will need to enter the PIN.')) return;
       
-      fetch(`${BASE_PATH}/admin/tokens/${tokenId}/access-code`, {
+      fetch(`${BASE}/admin/tokens/${tokenId}/access-code`, {
         method: 'DELETE'
       })
       .then(r => {
