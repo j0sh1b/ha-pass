@@ -162,6 +162,7 @@ async def security_headers(request: Request, call_next):
             f"img-src {img_src}; "
             f"connect-src 'self'"
         )
+        logger.info("CSP_INGRESS: Using ingress CSP (no frame-ancestors)")
     else:
         response.headers["X-Frame-Options"] = "DENY"
         csp = (
@@ -173,7 +174,10 @@ async def security_headers(request: Request, call_next):
             f"connect-src 'self'; "
             f"frame-ancestors 'none'"
         )
+        logger.info("CSP_NON_INGRESS: Using non-ingress CSP with frame-ancestors 'none'")
     response.headers["Content-Security-Policy"] = csp
+    if "/admin" in request.url.path:
+        logger.info("CSP_HEADER: %s", csp[:100])
     # Prevent browser from caching HTML responses (avoids stale JS after deploys)
     content_type = response.headers.get("content-type", "")
     if "text/html" in content_type:
