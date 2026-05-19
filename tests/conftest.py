@@ -14,6 +14,12 @@ os.environ.setdefault("HA_BASE_URL", "http://localhost:8123")
 os.environ.setdefault("HA_TOKEN", "test-token")
 # Test encryption key (64 hex chars = 32 bytes) - generate with: openssl rand -hex 32
 os.environ.setdefault("ENCRYPTION_KEY", "7c4a8d09ca3762af61e59520943dc26494f8941b76b6b25fef0b9f0c56f1c4f2")
+# Public API test settings - use environment values if set, otherwise defaults
+# To run tests with API enabled: API_ENABLED=true API_TOKEN=... pytest ...
+if "API_ENABLED" not in os.environ:
+    os.environ["API_ENABLED"] = "false"
+if "API_TOKEN" not in os.environ:
+    os.environ["API_TOKEN"] = ""
 
 import pytest
 import pytest_asyncio

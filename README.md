@@ -28,9 +28,19 @@ installs, just a link.
    - An **Expiry** date/time
 2. Share the generated link (`http://<your-ha-ip>:5880/g/{slug}`) with your guest.
 3. The guest opens the link on their phone. No app install or HA account needed.
-4. If the token has a PIN set, the guest must enter it (or use a link with `?t={encoded_pin}`).
+4. If the token has a PIN set, the guest must enter it (or use a link with an access code via `?c={code}`).
 5. If the token has a future start time, the guest sees a "not yet available" message (or your custom message) until that time.
 6. When the token expires, the guest sees the contact message (or your custom message) and can no longer control devices.
+
+### Link Sharing with Access Codes
+
+For PIN-protected tokens, you can generate **access codes** that allow guests to bypass PIN entry:
+
+- Click **Copy with PIN** or **QR with PIN** in the admin dashboard
+- This generates a random access code and creates a link like `http://<your-ha-ip>:5880/g/{slug}?c={access_code}`
+- Guests using this link get immediate access without typing the PIN
+- The actual PIN is **never** exposed in URLs — only a random access code
+- Access codes can be revoked at any time by modifying the token's PIN
 
 ### Token Statuses
 
@@ -48,7 +58,9 @@ In the admin dashboard, tokens display one of these statuses:
 
 - **Scoped guest tokens** — each token grants access to a specific set of entities
 - **PIN protection** — optionally require a PIN for guest access
-- **QR codes with PIN** — generate QR codes that include embedded PIN for instant access
+- **Access codes for link sharing** — generate reusable access codes (`?c=`) for instant access without exposing the PIN
+- **PIN encryption** — all PINs encrypted at rest using AES-256-GCM (mandatory, requires encryption key)
+- **Secure PIN entry** — PINs submitted via POST (not GET) to avoid exposure in browser history or logs
 - **Custom entity ordering** — drag-and-drop to reorder how entities appear on the guest page
 - **Custom messages** — personalize the messages guests see before/after token validity
 - **Time-limited access** — tokens auto-expire after a configurable duration
@@ -61,6 +73,7 @@ In the admin dashboard, tokens display one of these statuses:
 - **Service allowlist** — only safe services (toggle, set_temperature, etc.) are permitted
 - **Rate limiting** — 30 req/min per token
 - **IP allowlisting** — optionally restrict tokens to specific CIDRs
+- **Public REST API** — optional API for external integrations (disabled by default)
 
 ## Installation
 
@@ -73,7 +86,7 @@ In the admin dashboard, tokens display one of these statuses:
    ```
 
 2. Find **HAPass** in the store and click **Install**.
-3. Go to the **Configuration** tab and set your options.
+3. Go to the **Configuration** tab and set your options (including the required **Encryption Key**).
 4. Start the add-on.
 5. Click **Open Web UI** or find HAPass in the HA sidebar.
 
@@ -97,6 +110,7 @@ services:
       - ADMIN_PASSWORD=changeme
       - HA_BASE_URL=http://homeassistant.local:8123
       - HA_TOKEN=your_long_lived_token_here
+      - ENCRYPTION_KEY=your_64_char_hex_key_here
 ```
 
 ```bash
@@ -113,6 +127,7 @@ docker run -d --restart unless-stopped \
   -e ADMIN_PASSWORD=changeme \
   -e HA_BASE_URL=http://homeassistant.local:8123 \
   -e HA_TOKEN=your_long_lived_token_here \
+  -e ENCRYPTION_KEY=your_64_char_hex_key_here \
   ghcr.io/j0sh1b/ha-pass:latest
 ```
 
@@ -135,6 +150,9 @@ Set these in **Settings → Add-ons → HAPass → Configuration**:
 | **Background Color** | Hex color for page background | `#F2F0E9` |
 | **Primary Color** | Hex color for accents and buttons | `#D9523C` |
 | **Guest URL** | External base URL for guest links (e.g. `https://guest.myhouse.com`) | — |
+| **Encryption Key** | **Required**: 64-character hex key for PIN encryption. Generate with: `openssl rand -hex 32` | — |
+| **API Enabled** | Enable the public REST API for external integrations | `false` |
+| **API Token** | API authentication token (min 32 chars, required if API Enabled) | — |
 
 ### Docker Environment Variables
 
@@ -144,6 +162,7 @@ Set these in **Settings → Add-ons → HAPass → Configuration**:
 | `ADMIN_PASSWORD` | Admin login password (min 8 chars) | Yes | — |
 | `HA_BASE_URL` | Home Assistant base URL | Yes | — |
 | `HA_TOKEN` | HA long-lived access token | Yes | — |
+| `ENCRYPTION_KEY` | 64-character hex key for PIN encryption | Yes | — |
 | `DB_PATH` | SQLite database path | No | `/data/db.sqlite` |
 | `APP_NAME` | Display name shown to guests | No | `Home Access` |
 | `CONTACT_MESSAGE` | Message shown on expired pages | No | `Please request a new link...` |
@@ -151,6 +170,22 @@ Set these in **Settings → Add-ons → HAPass → Configuration**:
 | `BRAND_BG` | Background color (hex) | No | `#F2F0E9` |
 | `BRAND_PRIMARY` | Primary/accent color (hex) | No | `#D9523C` |
 | `GUEST_URL` | External base URL for guest links | No | — |
+| `API_ENABLED` | Enable public REST API | No | `false` |
+| `API_TOKEN` | API authentication token (min 32 chars) | No | — |
+
+### Encryption Key Setup
+
+The **Encryption Key** is **required** and must be exactly 64 hexadecimal characters. This key encrypts all PINs using AES-256-GCM before storing them in the database.
+
+**Generate a key:**
+```bash
+openssl rand -hex 32
+```
+
+**Important:**
+- Store this key securely — losing it means encrypted PINs cannot be decrypted
+- If you change this key, existing encrypted PINs will become unreadable
+- The application will not start without a valid encryption key
 
 ## Home Assistant Activity Events
 
@@ -203,6 +238,7 @@ actions:
 | `light` | `turn_on`, `turn_off`, `toggle` |
 | `switch` | `turn_on`, `turn_off`, `toggle` |
 | `input_boolean` | `turn_on`, `turn_off`, `toggle` |
+| `input_button` | `press` |
 | `climate` | `set_temperature`, `set_hvac_mode`, `turn_on`, `turn_off` |
 | `lock` | `lock`, `unlock`, `open` |
 | `media_player` | `media_play`, `media_pause`, `media_stop`, `volume_set`, `media_play_pause`, `turn_on`, `turn_off` |
@@ -233,6 +269,57 @@ Browser (Guest PWA)
                                       ├── REST API → Home Assistant
                                       └── WebSocket → HA event bus
 ```
+
+### Security Architecture
+
+- **PIN Encryption**: All PINs encrypted with AES-256-GCM before storage
+- **Secure PIN Entry**: POST-based validation (not GET/query params)
+- **Session Management**: Validated PIN sessions use secure, HTTP-only cookies
+- **Access Codes**: Random 128-bit codes for link sharing (PIN never in URL)
+- **CSRF Protection**: SameSite=Strict cookies for admin sessions
+- **Rate Limiting**: Per-token command rate limiting (30 req/min)
+- **API Security**: Optional REST API with mandatory API key authentication (disabled by default)
+
+## Public API
+
+HAPass exposes an optional REST API for external integrations. The API is **disabled by default** for security.
+
+### Enabling the API
+
+Add-on users: Set `api_enabled: true` and `api_token: your-secure-token` in the add-on configuration.
+
+Docker users: Set `API_ENABLED=true` and `API_TOKEN=your-secure-token` environment variables.
+
+### Authentication
+
+All API requests must include the `X-API-Key` header:
+
+```bash
+curl -H "X-API-Key: your-api-token-here" \
+     http://your-ha-instance:5880/api/v1/tokens
+```
+
+### Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/tokens` | List all tokens |
+| POST | `/api/v1/tokens` | Create a new token |
+| GET | `/api/v1/tokens/{id}` | Get a specific token |
+| PATCH | `/api/v1/tokens/{id}` | Update a token |
+| DELETE | `/api/v1/tokens/{id}` | Revoke/delete a token |
+
+### API Documentation
+
+When the API is enabled, interactive documentation is available at:
+- Swagger UI: `/api/docs`
+- OpenAPI Schema: `/api/openapi.json`
+
+### Security
+
+- API token must be at least 32 characters
+- Rate limited to 100 requests per minute per IP
+- Constant-time comparison prevents timing attacks
 
 ## Disclaimer
 

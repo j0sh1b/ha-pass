@@ -16,10 +16,11 @@ For direct port access (e.g., `http://<your-ha-ip>:5880/admin/dashboard`), set *
 
 1. In the admin dashboard, create an **access token** with selected entities and an expiration time.
 2. Optionally set **custom messages** that guests will see before the token starts or after it expires.
-3. Optionally reorder the selected entities by dragging them in the "Entities" modal.
-4. Share the generated link (`http://<your-ha-ip>:5880/g/{slug}`) with your guest.
-5. The guest opens the link on their phone. No app install or HA account needed.
-6. When the token expires, the guest sees the contact message (or your custom message) and can no longer control devices.
+3. Optionally add **PIN protection** for extra security.
+4. Optionally reorder the selected entities by dragging them in the "Entities" modal.
+5. Share the generated link (`http://<your-ha-ip>:5880/g/{slug}`) with your guest.
+6. The guest opens the link on their phone. No app install or HA account needed.
+7. When the token expires, the guest sees the contact message (or your custom message) and can no longer control devices.
 
 ## Admin Dashboard
 
@@ -28,6 +29,7 @@ The admin dashboard provides a clean, intuitive interface for managing guest acc
 - **Status**: Active, Expiring, Scheduled, Expired, or Revoked
 - **Entity count** and **expiry time**
 - **Last accessed** time and **IP allowlist** (if set)
+- **PIN protection** status
 
 ### Token Actions
 
@@ -37,8 +39,8 @@ Each token has a row of action buttons:
 |--------|---------|
 | **Copy** | Copy the guest link to clipboard |
 | **QR** | Show a QR code for the guest link |
-| **Copy with PIN** | Copy link with embedded PIN (disabled if no PIN set) |
-| **QR with PIN** | Show QR code with embedded PIN (disabled if no PIN set) |
+| **Copy with PIN** | Generate an access code and copy link with `?c=` parameter (disabled if no PIN set) |
+| **QR with PIN** | Generate an access code and show QR code with `?c=` parameter (disabled if no PIN set) |
 | **Entities** | Open the entity picker to change which devices the guest can control |
 | **Expiry** | Modify the expiry date/time and start date/time |
 | **Messages** | Edit custom pre-start and expired messages |
@@ -56,13 +58,13 @@ Each token has a row of action buttons:
 **PIN Protection:**
 - Click **Set PIN** (or **Change PIN** if one exists) to add PIN protection
 - Leave the PIN field empty and save to remove protection
-- Use **Copy with PIN** or **QR with PIN** to share links that work immediately without manual PIN entry
+- Use **Copy with PIN** or **QR with PIN** to share links with an access code that grants immediate access
 
 ## Entity Ordering
 
 When creating or editing a token, you can customize the order in which entities appear on the guest page:
 
-1. Click **Edit** on any token to open the entity picker
+1. Click **Entities** on any token to open the entity picker
 2. In the **Selected** section, drag entities using the ⋮⋮ handle to reorder them
 3. The new order is saved automatically when you click **Save**
 4. Guests will see entities in exactly the order you specified
@@ -100,8 +102,8 @@ You can add an optional PIN to any token for extra security. When a PIN is set, 
 | Scenario | Behavior |
 |----------|----------|
 | **No PIN** | Guest opens link and sees controls immediately |
-| **PIN set, no PIN in URL** | Guest sees a PIN entry page |
-| **PIN set, PIN in URL** | Guest sees controls immediately (direct access) |
+| **PIN set, no access code** | Guest sees a PIN entry page |
+| **PIN set, access code in URL (`?c=`)** | Guest sees controls immediately (direct access) |
 | **Wrong PIN** | Guest sees error message and can retry |
 | **Pre-start/Expired** | PIN check is skipped; guest sees custom/default message |
 
@@ -116,12 +118,12 @@ For existing tokens:
 2. Enter the new PIN (or leave empty to remove)
 3. Click **Save**
 
-### Sharing Links with PIN
+### Sharing Links with Access Codes
 
-When a token has a PIN, you'll see a **Copy with PIN** button in the admin dashboard. This copies the link with the PIN encoded in the URL:
+When a token has a PIN, you'll see **Copy with PIN** and **QR with PIN** buttons in the admin dashboard. These generate a random **access code** and include it in the link:
 
 ```
-http://<your-ha-ip>:5880/g/{slug}?t={encoded_pin}
+http://<your-ha-ip>:5880/g/{slug}?c={access_code}
 ```
 
 Guests opening this link won't need to type the PIN — they'll have direct access. This is useful for:
@@ -129,14 +131,27 @@ Guests opening this link won't need to type the PIN — they'll have direct acce
 - QR codes that should work immediately
 - Guests who may have difficulty remembering a PIN
 
-**Note:** Links with embedded PINs provide the same access as knowing the PIN. Share them carefully!
+**Security Notes:**
+- Access codes are random 32-character hex strings (128-bit entropy)
+- The actual PIN is **never** exposed in URLs, browser history, or server logs
+- Access codes can be revoked by clearing them (the admin must regenerate to re-enable)
+- Anyone with the access code link has the same access as knowing the PIN
+
+### Revoking Access Codes
+
+To revoke an access code and force guests to enter the PIN:
+1. Click **Set PIN** or **Change PIN** on the token
+2. The access code will be cleared automatically when you modify the PIN
+3. Guests with the old link will now need to enter the PIN manually
 
 ### Security Considerations
 
-- PINs are encrypted at rest using AES-256-GCM (authenticated encryption)
+- PINs are encrypted at rest using **AES-256-GCM** (authenticated encryption)
 - The slug in the URL is the primary security mechanism
 - PINs add a layer of protection against accidental link sharing
 - For highly sensitive access, consider combining IP allowlisting with PIN protection
+- PIN entry uses POST requests (not GET) to avoid exposing PINs in browser history or server logs
+- Validated PIN sessions use secure, HTTP-only cookies with SameSite=Strict protection
 
 ## Configuration
 
@@ -151,11 +166,11 @@ Set these options in the add-on Configuration tab:
 | **Background Color** | Hex color for page background (e.g., `#F2F0E9`) |
 | **Primary Color** | Hex color for accents and buttons (e.g., `#D9523C`) |
 | **Guest URL** | External base URL for guest links (e.g., `https://guest.myhouse.com`). Leave empty for local network. |
-| **Encryption Key** | Required: 64-character hex key for PIN encryption. Generate with: `openssl rand -hex 32` |
+| **Encryption Key** | **Required**: 64-character hex key for PIN encryption. Generate with: `openssl rand -hex 32` |
 
 ### Encryption Key Setup
 
-The **Encryption Key** is required for HAPass to start. This key is used to encrypt PINs before storing them in the database.
+The **Encryption Key** is **required** for HAPass to start. This key is used to encrypt PINs before storing them in the database using AES-256-GCM authenticated encryption.
 
 **Generating a key:**
 ```bash
@@ -173,3 +188,51 @@ Copy this value into the **Encryption Key** field in the add-on configuration.
 - Keep this key secure and back it up — losing it means you cannot decrypt existing PINs
 - The key must be exactly 64 hexadecimal characters (0-9, a-f, A-F)
 - If you change this key, existing encrypted PINs will become unreadable
+- The application will not start without a valid encryption key
+
+## Public API
+
+HAPass exposes a REST API for external integrations. The API is disabled by default for security.
+
+### Enabling the Public API
+
+1. Go to the addon configuration in Home Assistant
+2. Set `api_enabled` to `true`
+3. Set `api_token` to a secure random string (at least 32 characters)
+4. Restart the addon
+
+### Authentication
+
+All API requests must include the `X-API-Key` header:
+
+```bash
+curl -H "X-API-Key: your-api-token-here" \
+     https://your-ha-instance:5880/api/v1/tokens
+```
+
+### API Documentation
+
+When the API is enabled, interactive documentation is available at:
+- Swagger UI: `/api/docs`
+- OpenAPI Schema: `/api/openapi.json`
+
+### Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/tokens` | List all tokens |
+| POST | `/api/v1/tokens` | Create a new token |
+| GET | `/api/v1/tokens/{id}` | Get a specific token |
+| PATCH | `/api/v1/tokens/{id}` | Update a token |
+| DELETE | `/api/v1/tokens/{id}` | Revoke/delete a token |
+
+### Rate Limiting
+
+The API is rate-limited to 100 requests per minute per IP address.
+
+### Security Considerations
+
+- Keep your API token secret
+- Use HTTPS in production
+- The API has the same permissions as the admin dashboard
+- Disable the API when not needed

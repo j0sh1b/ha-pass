@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     supervisor_token: str = ""
     guest_url: str = ""
     encryption_key: str = Field(min_length=64, max_length=64, pattern=r"^[0-9a-fA-F]{64}$")
+    api_enabled: bool = False
+    api_token: str = ""  # Must be at least 32 characters if enabled
 
     @model_validator(mode="after")
     def _require_credentials_in_standalone(self):
@@ -26,6 +28,12 @@ class Settings(BaseSettings):
                 raise ValueError("admin_password must be at least 8 characters in standalone mode")
             if not self.admin_username:
                 raise ValueError("admin_username is required in standalone mode")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_api_token(self):
+        if self.api_enabled and len(self.api_token) < 32:
+            raise ValueError("api_token must be at least 32 characters when api_enabled is true")
         return self
 
 

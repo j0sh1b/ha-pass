@@ -26,6 +26,8 @@ options:
   brand_primary: "#D9523C"
   guest_url: ""
   encryption_key: ""
+  api_enabled: false
+  api_token: ""
 schema:
   admin_username: "str?"
   admin_password: "password?"
@@ -35,3 +37,5 @@ schema:
   brand_primary: str
   guest_url: "str?"
   encryption_key: str
+  api_enabled: bool
+  api_token: "str?"

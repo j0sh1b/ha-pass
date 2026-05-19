@@ -17,7 +17,7 @@ from app.context import base_context
 from app.ingress import get_ingress_path
 from app.models import NEVER_EXPIRES_SECONDS
 from app.rate_limiter import rate_limiter
-from app.routers import admin, guest
+from app.routers import admin, guest, public_api
 
 logging.basicConfig(
     level=logging.INFO,
@@ -80,12 +80,18 @@ async def lifespan(app: FastAPI):
         logger.exception("Error closing database")
 
 
+# Conditional docs URLs based on API enabled status
+docs_url = "/api/docs" if settings.api_enabled else None
+openapi_url = "/api/openapi.json" if settings.api_enabled else None
+
 app = FastAPI(
     title="HAPass",
+    description="Home Access Token Management API" if settings.api_enabled else None,
+    version="1.0.0",
     lifespan=lifespan,
-    docs_url=None,
-    redoc_url=None,
-    openapi_url=None,
+    docs_url=docs_url,
+    redoc_url=None,  # Disable ReDoc, use Swagger only
+    openapi_url=openapi_url,
 )
 _templates = Jinja2Templates(directory="templates")
 
@@ -129,6 +135,10 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(admin.router)
 app.include_router(guest.router)
 
+# Conditionally include public API router
+if settings.api_enabled:
+    app.include_router(public_api.router)
+
 
 @app.get("/")
 async def root(request: Request):
@@ -142,6 +152,7 @@ async def admin_dashboard_page(request: Request):
         "never_expires": NEVER_EXPIRES_SECONDS,
         "is_ingress": bool(ctx["base_path"]),
         "guest_url": settings.guest_url,
+        "api_enabled": settings.api_enabled,
     })
     return _templates.TemplateResponse(request, "admin_dashboard.html", ctx)
 
