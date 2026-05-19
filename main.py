@@ -128,7 +128,10 @@ async def set_root_path(request: Request, call_next):
 async def security_headers(request: Request, call_next):
     nonce = secrets.token_urlsafe(16)
     request.state.csp_nonce = nonce
-    ingress_path = request.state.ingress_path  # Already set by set_root_path
+    # Re-detect ingress_path since request.state isn't shared between middleware
+    ingress_path = getattr(request.state, "ingress_path", None)
+    if ingress_path is None:
+        ingress_path = get_ingress_path(request)
     
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
