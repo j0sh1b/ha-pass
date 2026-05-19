@@ -31,7 +31,7 @@ from app.rate_limiter import rate_limiter
 # Cookie name for guest PIN session
 GUEST_PIN_COOKIE = "ha_guest_pin_session"
 
-router = APIRouter(prefix="/g")
+router = APIRouter(prefix="/g", include_in_schema=False)
 logger = logging.getLogger(__name__)
 
 # L-31: Named constant for SSE keepalive interval

@@ -24,7 +24,7 @@ from app.models import (
 )
 from app.rate_limiter import RateLimiter
 
-router = APIRouter(prefix="/admin")
+router = APIRouter(prefix="/admin", include_in_schema=False)
 
 # Admin session lifetime — 24 hours, hardcoded like Uptime Kuma / Dockge.
 ADMIN_SESSION_TTL = 86400

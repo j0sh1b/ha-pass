@@ -1,6 +1,6 @@
 """Pydantic request/response models."""
-from typing import Any
-from pydantic import BaseModel, Field
+from typing import Any, Self
+from pydantic import BaseModel, Field, model_validator
 
 NEVER_EXPIRES_SECONDS = 4102444800  # 2099-12-31T00:00:00Z
 
@@ -36,12 +36,24 @@ class TokenCreateRequest(BaseModel):
     label: str = Field(..., min_length=1, max_length=200)
     slug: str | None = Field(default=None, pattern=r"^[a-z0-9_-]{1,64}$")
     entity_ids: list[str] = Field(..., min_length=1)
-    expires_in_seconds: int = Field(..., gt=0)
+    expires_in_seconds: int | None = Field(default=None, gt=0)
+    expires_at: int | None = Field(default=None, gt=0)
     ip_allowlist: list[str] | None = None
     starts_at: int | None = None  # Unix timestamp; defaults to now if not provided
     pre_start_message: str | None = Field(default=None, max_length=1000)
     expired_message: str | None = Field(default=None, max_length=1000)
     pin: str | None = Field(default=None, max_length=20)
+
+    @model_validator(mode="after")
+    def check_expiry_fields(self) -> Self:
+        """Ensure exactly one of expires_in_seconds or expires_at is provided."""
+        has_seconds = self.expires_in_seconds is not None
+        has_absolute = self.expires_at is not None
+        if has_seconds and has_absolute:
+            raise ValueError("Cannot specify both expires_in_seconds and expires_at")
+        if not has_seconds and not has_absolute:
+            raise ValueError("Must specify either expires_in_seconds or expires_at")
+        return self
 
 
 class TokenUpdateEntitiesRequest(BaseModel):

@@ -50,10 +50,24 @@ async def create_token(request: Request, body: TokenCreateRequest) -> dict:
                 )
 
     slug = body.slug or secrets.token_hex(16)
-    if body.expires_in_seconds == NEVER_EXPIRES_SECONDS:
-        expires_at = NEVER_EXPIRES_SECONDS
+    now = int(time.time())
+
+    # Handle expires_in_seconds vs expires_at
+    if body.expires_in_seconds is not None:
+        # Relative expiration time
+        if body.expires_in_seconds == NEVER_EXPIRES_SECONDS:
+            expires_at = NEVER_EXPIRES_SECONDS
+        else:
+            expires_at = now + body.expires_in_seconds
     else:
-        expires_at = int(time.time()) + body.expires_in_seconds
+        # Absolute expiration time (body.expires_at is guaranteed to be set by validator)
+        expires_at = body.expires_at
+        # Validate expires_at is in the future (unless it's the special "never" value)
+        if expires_at != NEVER_EXPIRES_SECONDS and expires_at <= now:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="expires_at must be in the future",
+            )
 
     # Ensure slug uniqueness
     existing = await db.get_token_by_slug(slug)
