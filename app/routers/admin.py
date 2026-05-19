@@ -286,32 +286,24 @@ async def update_token_pin(
 @router.post("/tokens/{token_id}/access-code")
 async def create_access_code(
     token_id: str,
-    body: AccessCodeRequest,
     _: str = Depends(require_admin),
 ) -> dict:
     """Generate a reusable access code for PIN-protected tokens.
     
-    The PIN is required to generate the code, ensuring only authorized
-    users can create access links. The access code can be used multiple
+    The admin is already authenticated via require_admin, so no PIN
+    verification is needed. The access code can be used multiple
     times and by multiple devices.
     """
     row = await db.get_token_by_id(token_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     
-    # Verify the token has a PIN
+    # Verify the token has a PIN (access code only works with PIN-protected tokens)
     token_pin = row["pin"] if "pin" in row.keys() else None
     if not token_pin:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Token does not have a PIN"
-        )
-    
-    # Validate the provided PIN
-    if body.pin != token_pin:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid PIN"
         )
     
     # Generate or regenerate access code

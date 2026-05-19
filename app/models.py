@@ -63,7 +63,8 @@ class TokenUpdatePinRequest(BaseModel):
 
 
 class AccessCodeRequest(BaseModel):
-    pin: str = Field(..., max_length=20)
+    # PIN no longer required - admin is already authenticated
+    pin: str | None = Field(default=None, max_length=20)
 
 
 class CommandRequest(BaseModel):

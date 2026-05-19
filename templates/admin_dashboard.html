@@ -1569,17 +1569,13 @@ document.addEventListener('click', e => {
     case 'copy-url-with-pin': {
       const url = el.dataset.url;
       const tokenId = el.dataset.tokenId;
-      const pin = prompt('Enter PIN to generate access link:');
-      if (!pin) return;
       
       fetch(`${BASE_PATH}/admin/tokens/${tokenId}/access-code`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin })
+        method: 'POST'
       })
       .then(r => {
         if (r.ok) return r.json();
-        throw new Error('Invalid PIN');
+        throw new Error('Failed to generate access link');
       })
       .then(data => {
         copyUrl(`${url}?c=${data.access_code}`);
@@ -1593,17 +1589,13 @@ document.addEventListener('click', e => {
     case 'show-qr-with-pin': {
       const url = el.dataset.url;
       const tokenId = el.dataset.tokenId;
-      const pin = prompt('Enter PIN to generate QR code:');
-      if (!pin) return;
       
       fetch(`${BASE_PATH}/admin/tokens/${tokenId}/access-code`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin })
+        method: 'POST'
       })
       .then(r => {
         if (r.ok) return r.json();
-        throw new Error('Invalid PIN');
+        throw new Error('Failed to generate QR code');
       })
       .then(data => {
         showQr(`${url}?c=${data.access_code}`);

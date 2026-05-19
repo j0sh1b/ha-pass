@@ -9,9 +9,8 @@ import pytest
 class TestAccessCodeGeneration:
     """Tests for admin API access code generation."""
 
-    async def test_create_access_code_requires_pin(self, client, admin_session, mock_ha_client):
-        """Cannot generate access code without providing the token's PIN."""
-        # Create a token with PIN
+    async def test_create_access_code_succeeds_without_pin(self, client, admin_session, mock_ha_client):
+        """Access code is generated without requiring PIN input (admin is already authenticated)."""
         r = await client.post(
             "/admin/tokens",
             json={
@@ -25,53 +24,9 @@ class TestAccessCodeGeneration:
         assert r.status_code == 201
         token = r.json()
 
-        # Try to create access code without PIN
+        # Generate access code without providing PIN (admin auth is sufficient)
         r = await client.post(
             f"/admin/tokens/{token['id']}/access-code",
-            json={},
-            cookies=admin_session,
-        )
-        assert r.status_code == 422  # Validation error
-
-    async def test_create_access_code_wrong_pin_fails(self, client, admin_session, mock_ha_client):
-        """Access code generation fails with wrong PIN."""
-        r = await client.post(
-            "/admin/tokens",
-            json={
-                "label": "PIN Protected Token",
-                "entity_ids": ["light.living_room"],
-                "expires_in_seconds": 3600,
-                "pin": "1234",
-            },
-            cookies=admin_session,
-        )
-        token = r.json()
-
-        r = await client.post(
-            f"/admin/tokens/{token['id']}/access-code",
-            json={"pin": "wrong"},
-            cookies=admin_session,
-        )
-        assert r.status_code == 401
-        assert "Invalid PIN" in r.json()["detail"]
-
-    async def test_create_access_code_correct_pin_succeeds(self, client, admin_session, mock_ha_client):
-        """Access code is generated with correct PIN."""
-        r = await client.post(
-            "/admin/tokens",
-            json={
-                "label": "PIN Protected Token",
-                "entity_ids": ["light.living_room"],
-                "expires_in_seconds": 3600,
-                "pin": "1234",
-            },
-            cookies=admin_session,
-        )
-        token = r.json()
-
-        r = await client.post(
-            f"/admin/tokens/{token['id']}/access-code",
-            json={"pin": "1234"},
             cookies=admin_session,
         )
         assert r.status_code == 200
@@ -94,7 +49,6 @@ class TestAccessCodeGeneration:
 
         r = await client.post(
             f"/admin/tokens/{token['id']}/access-code",
-            json={"pin": "1234"},
             cookies=admin_session,
         )
         assert r.status_code == 400
@@ -104,7 +58,6 @@ class TestAccessCodeGeneration:
         """404 when trying to create access code for non-existent token."""
         r = await client.post(
             "/admin/tokens/nonexistent/access-code",
-            json={"pin": "1234"},
             cookies=admin_session,
         )
         assert r.status_code == 404
@@ -127,10 +80,9 @@ class TestAccessCodeRevocation:
         )
         token = r.json()
 
-        # Create access code
+        # Create access code (no PIN required - admin already authenticated)
         r = await client.post(
             f"/admin/tokens/{token['id']}/access-code",
-            json={"pin": "1234"},
             cookies=admin_session,
         )
         access_code = r.json()["access_code"]
@@ -167,7 +119,6 @@ class TestAccessCodeGuestAccess:
 
         r = await client.post(
             f"/admin/tokens/{token['id']}/access-code",
-            json={"pin": "1234"},
             cookies=admin_session,
         )
         access_code = r.json()["access_code"]
@@ -225,7 +176,6 @@ class TestAccessCodeGuestAccess:
 
         r = await client.post(
             f"/admin/tokens/{token['id']}/access-code",
-            json={"pin": "1234"},
             cookies=admin_session,
         )
         access_code = r.json()["access_code"]
