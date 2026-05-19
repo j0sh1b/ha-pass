@@ -43,7 +43,7 @@
     </div>
     {% endif %}
     
-    <form id="pin-form" method="POST" action="pin" class="space-y-4">
+    <form id="pin-form" method="POST" action="{{ base_path }}/g/{{ slug }}/pin" class="space-y-4">
       <div>
         <label for="pin-input" class="sr-only">PIN</label>
         <input

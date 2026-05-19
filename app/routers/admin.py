@@ -12,6 +12,7 @@ from app.auth import INGRESS_SENTINEL, SESSION_COOKIE, require_admin, verify_pas
 from app.config import settings
 from app import ha_client
 from app.models import (
+    AccessCodeRequest,
     AdminLoginRequest,
     NEVER_EXPIRES_SECONDS,
     SUPPORTED_DOMAINS,
@@ -280,6 +281,60 @@ async def update_token_pin(
     await db.update_token_pin(token_id, pin=body.pin)
     row = await db.get_token_by_id(token_id)
     return _row_to_response(row)
+
+
+@router.post("/tokens/{token_id}/access-code")
+async def create_access_code(
+    token_id: str,
+    body: AccessCodeRequest,
+    _: str = Depends(require_admin),
+) -> dict:
+    """Generate a reusable access code for PIN-protected tokens.
+    
+    The PIN is required to generate the code, ensuring only authorized
+    users can create access links. The access code can be used multiple
+    times and by multiple devices.
+    """
+    row = await db.get_token_by_id(token_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    
+    # Verify the token has a PIN
+    token_pin = row["pin"] if "pin" in row.keys() else None
+    if not token_pin:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token does not have a PIN"
+        )
+    
+    # Validate the provided PIN
+    if body.pin != token_pin:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid PIN"
+        )
+    
+    # Generate or regenerate access code
+    code = await db.set_token_access_code(token_id)
+    
+    return {"access_code": code}
+
+
+@router.delete("/tokens/{token_id}/access-code")
+async def revoke_access_code(
+    token_id: str,
+    _: str = Depends(require_admin),
+) -> dict:
+    """Revoke the access code, disabling link-based access.
+    
+    Anyone with the previous link will now need to enter the PIN.
+    """
+    row = await db.get_token_by_id(token_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    
+    await db.clear_token_access_code(token_id)
+    return {"ok": True}
 
 
 @router.delete("/tokens/{token_id}")

@@ -712,14 +712,14 @@ function renderTokens() {
         </div>
         <!-- Row 2: Copy with PIN | QR with PIN (disabled when no PIN) -->
         <div class="grid grid-cols-2 gap-2 mt-2">
-          ${t.pin ? `<button data-url="${esc(url)}" data-pin="${esc(t.pin)}" data-action="copy-url-with-pin"
+          ${t.pin ? `<button data-url="${esc(url)}" data-token-id="${esc(t.id)}" data-action="copy-url-with-pin"
             class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">
             <span aria-hidden="true" class="material-symbols-outlined text-sm">vpn_key</span> Copy with PIN
           </button>` : `<button disabled
             class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark opacity-40 cursor-not-allowed">
             <span aria-hidden="true" class="material-symbols-outlined text-sm">vpn_key</span> Copy with PIN
           </button>`}
-          ${t.pin ? `<button data-url="${esc(url)}" data-pin="${esc(t.pin)}" data-action="show-qr-with-pin"
+          ${t.pin ? `<button data-url="${esc(url)}" data-token-id="${esc(t.id)}" data-action="show-qr-with-pin"
             class="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-display font-medium border border-border-light dark:border-border-dark hover:bg-soot/5 dark:hover:bg-white/5 transition-colors">
             <span aria-hidden="true" class="material-symbols-outlined text-sm">qr_code_2</span> QR with PIN
           </button>` : `<button disabled
@@ -1464,13 +1464,6 @@ function showQr(url) {
   openModal('qr-modal');
 }
 
-function showQrWithPin(url, pin) {
-  // Encode PIN same as copy-url-with-pin
-  const encoded = btoa(pin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  const urlWithPin = `${url}?t=${encoded}`;
-  showQr(urlWithPin);
-}
-
 function closeQrModal() { closeModal('qr-modal'); }
 
 // ── Escape Key Handler ────────────────────────────────────────────────
@@ -1575,17 +1568,69 @@ document.addEventListener('click', e => {
     case 'copy-url': copyUrl(el.dataset.url); break;
     case 'copy-url-with-pin': {
       const url = el.dataset.url;
-      const pin = el.dataset.pin;
-      // URL-safe base64 encode the PIN
-      const encoded = btoa(pin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-      copyUrl(`${url}?t=${encoded}`);
+      const tokenId = el.dataset.tokenId;
+      const pin = prompt('Enter PIN to generate access link:');
+      if (!pin) return;
+      
+      fetch(`${BASE_PATH}/admin/tokens/${tokenId}/access-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin })
+      })
+      .then(r => {
+        if (r.ok) return r.json();
+        throw new Error('Invalid PIN');
+      })
+      .then(data => {
+        copyUrl(`${url}?c=${data.access_code}`);
+      })
+      .catch(err => {
+        alert(err.message || 'Failed to generate access link');
+      });
       break;
     }
     case 'show-qr': showQr(el.dataset.url); break;
     case 'show-qr-with-pin': {
       const url = el.dataset.url;
-      const pin = el.dataset.pin;
-      showQrWithPin(url, pin);
+      const tokenId = el.dataset.tokenId;
+      const pin = prompt('Enter PIN to generate QR code:');
+      if (!pin) return;
+      
+      fetch(`${BASE_PATH}/admin/tokens/${tokenId}/access-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin })
+      })
+      .then(r => {
+        if (r.ok) return r.json();
+        throw new Error('Invalid PIN');
+      })
+      .then(data => {
+        showQr(`${url}?c=${data.access_code}`);
+      })
+      .catch(err => {
+        alert(err.message || 'Failed to generate QR code');
+      });
+      break;
+    }
+    case 'revoke-access-code': {
+      const tokenId = el.dataset.tokenId;
+      if (!confirm('Revoke access link? Anyone with the link will need to enter the PIN.')) return;
+      
+      fetch(`${BASE_PATH}/admin/tokens/${tokenId}/access-code`, {
+        method: 'DELETE'
+      })
+      .then(r => {
+        if (r.ok) {
+          alert('Access link revoked');
+          loadTokens();
+        } else {
+          throw new Error('Failed to revoke');
+        }
+      })
+      .catch(err => {
+        alert(err.message || 'Failed to revoke access link');
+      });
       break;
     }
     case 'confirm-revoke': confirmRevoke(el.dataset.id); break;

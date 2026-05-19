@@ -8,6 +8,7 @@ connection pooling or switching to PostgreSQL.
 import asyncio
 import json
 import logging
+import secrets
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -107,6 +108,53 @@ async def delete_guest_pin_session(session_id: str) -> None:
     """Delete a guest PIN session (e.g., on logout)."""
     db = await get_db()
     await db.execute("DELETE FROM guest_pin_sessions WHERE id = ?", (session_id,))
+    await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Access codes (for link-based access without exposing PIN)
+# ---------------------------------------------------------------------------
+
+async def set_token_access_code(token_id: str) -> str:
+    """Generate and store a random access code for a token.
+    
+    The access code acts as a bearer token that grants the same access
+    as entering the PIN correctly. It can be used multiple times and
+    by multiple devices.
+    """
+    code = secrets.token_hex(16)  # 32-char hex
+    db = await get_db()
+    await db.execute(
+        "UPDATE tokens SET access_code = ? WHERE id = ?",
+        (code, token_id)
+    )
+    await db.commit()
+    return code
+
+
+async def get_token_by_access_code(access_code: str) -> dict[str, Any] | None:
+    """Look up token by access code.
+    
+    Returns the token if the access code is valid, None otherwise.
+    """
+    db = await get_db()
+    async with db.execute(
+        "SELECT * FROM tokens WHERE access_code = ?",
+        (access_code,)
+    ) as cur:
+        row = await cur.fetchone()
+        if row:
+            return _decrypt_pin_in_row(row)
+        return None
+
+
+async def clear_token_access_code(token_id: str) -> None:
+    """Remove access code, disabling link-based access."""
+    db = await get_db()
+    await db.execute(
+        "UPDATE tokens SET access_code = NULL WHERE id = ?",
+        (token_id,)
+    )
     await db.commit()
 
 

@@ -4,7 +4,6 @@
 # operations require the slug in the URL path (not a cookie). The admin
 # dashboard uses SameSite=strict cookies for CSRF protection.
 import asyncio
-import base64
 import ipaddress
 import json
 import logging
@@ -184,29 +183,12 @@ def _schedule_page_load_activity(background_tasks: BackgroundTasks, row) -> None
 # PWA shell
 # ---------------------------------------------------------------------------
 
-def _decode_pin(encoded_pin: str | None) -> str | None:
-    """Decode URL-safe base64 encoded PIN, fallback to plaintext."""
-    if not encoded_pin:
-        return None
-    original = encoded_pin  # Keep original for plaintext fallback
-    try:
-        # Add padding if necessary
-        padding = 4 - len(encoded_pin) % 4
-        if padding != 4:
-            encoded_pin += '=' * padding
-        decoded = base64.urlsafe_b64decode(encoded_pin).decode('utf-8')
-        return decoded
-    except Exception:
-        # Not valid base64, return original unmodified input (plaintext fallback for non-JS users)
-        return original
-
-
 @router.get("/{slug}", response_class=HTMLResponse)
 async def guest_pwa(
     background_tasks: BackgroundTasks,
     request: Request,
     slug: str = Path(max_length=64),
-    t: str | None = Query(default=None, description="Encoded PIN for direct access"),
+    c: str | None = Query(default=None, description="Access code for direct entry"),
 ):
     row = await db.get_token_by_slug(slug)
     now = int(time.time())
@@ -253,8 +235,12 @@ async def guest_pwa(
     # Check if PIN is required and verify it
     token_pin = row["pin"] if "pin" in row.keys() else None
     if token_pin:
-        # Try to get PIN from query parameter (GET method with ?t= param)
-        provided_pin = _decode_pin(t)
+        # Check for access code in query parameter (reusable link access)
+        access_code_valid = False
+        if c:
+            token_by_code = await db.get_token_by_access_code(c)
+            if token_by_code and token_by_code["id"] == row["id"]:
+                access_code_valid = True
         
         # Also check for session-based PIN validation (POST method)
         session_id = request.cookies.get(GUEST_PIN_COOKIE)
@@ -264,15 +250,41 @@ async def guest_pwa(
             if pin_session and pin_session["token_id"] == row["id"]:
                 pin_session_valid = True
         
-        if provided_pin != token_pin and not pin_session_valid:
-            # PIN is required but not provided or incorrect - show PIN entry page
+        if not access_code_valid and not pin_session_valid:
+            # PIN is required but access code not provided and no valid session
             ctx = base_context(request)
             ctx.update({
                 "slug": slug,
                 "contact_message": settings.contact_message,
-                "error": "Incorrect PIN" if t else None,
             })
             return templates.TemplateResponse(request, "pin_entry.html", ctx)
+        
+        # Access code is valid but no session yet - create session and redirect
+        if access_code_valid and not pin_session_valid:
+            session_id = await db.create_guest_pin_session(row["id"])
+            await db.touch_token(row["id"])
+            await db.log_access(
+                token_id=row["id"],
+                event_type="page_load",
+                ip_address=_client_ip(request),
+                user_agent=request.headers.get("User-Agent"),
+            )
+            _schedule_page_load_activity(background_tasks, row)
+            
+            # Redirect to clean URL (without access code)
+            response = RedirectResponse(
+                url=f"{request.state.ingress_path}/g/{slug}",
+                status_code=status.HTTP_302_FOUND
+            )
+            response.set_cookie(
+                GUEST_PIN_COOKIE,
+                session_id,
+                httponly=True,
+                secure=request.url.scheme == "https",
+                samesite="strict",
+                max_age=db.GUEST_PIN_SESSION_TTL,
+            )
+            return response
     
     await db.touch_token(row["id"])
     await db.log_access(

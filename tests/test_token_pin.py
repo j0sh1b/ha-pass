@@ -140,8 +140,8 @@ class TestTokenPinGuestAccess:
         assert r.status_code == 200
         assert b"Enter PIN" in r.content
 
-    async def test_correct_pin_allows_access(self, client, admin_session, mock_ha_client):
-        """Correct PIN in URL allows access."""
+    async def test_access_code_allows_access(self, client, admin_session, mock_ha_client):
+        """Access code in URL allows access without PIN prompt."""
         r = await client.post(
             "/admin/tokens",
             json={
@@ -154,18 +154,25 @@ class TestTokenPinGuestAccess:
         )
         token = r.json()
 
-        # Encode PIN as URL-safe base64
-        encoded = base64.urlsafe_b64encode(b"1234").decode().rstrip("=")
+        # Generate access code via admin API
+        r = await client.post(
+            f"/admin/tokens/{token['id']}/access-code",
+            json={"pin": "1234"},
+            cookies=admin_session,
+        )
+        assert r.status_code == 200
+        access_code = r.json()["access_code"]
 
-        r = await client.get(f"/g/{token['slug']}?t={encoded}")
+        # Use access code in URL
+        r = await client.get(f"/g/{token['slug']}?c={access_code}", follow_redirects=True)
         assert r.status_code == 200
         # Should show the PWA, not PIN page
         assert b"Enter PIN" not in r.content
         # Check for PWA-specific content (the header with the token label)
         assert "PIN Token" in r.text or "Remaining" in r.text or "cards-container" in r.text
 
-    async def test_incorrect_pin_shows_error(self, client, admin_session, mock_ha_client):
-        """Incorrect PIN shows error."""
+    async def test_invalid_access_code_shows_pin_page(self, client, admin_session, mock_ha_client):
+        """Invalid access code shows PIN entry page."""
         r = await client.post(
             "/admin/tokens",
             json={
@@ -178,13 +185,33 @@ class TestTokenPinGuestAccess:
         )
         token = r.json()
 
-        # Try wrong PIN
-        encoded = base64.urlsafe_b64encode(b"9999").decode().rstrip("=")
-
-        r = await client.get(f"/g/{token['slug']}?t={encoded}")
+        # Try invalid access code
+        r = await client.get(f"/g/{token['slug']}?c=invalidcode")
         assert r.status_code == 200
         assert b"Enter PIN" in r.content
-        assert b"Incorrect PIN" in r.content
+
+    async def test_old_pin_in_url_no_longer_works(self, client, admin_session, mock_ha_client):
+        """Old ?t=PIN parameter no longer grants access."""
+        import base64
+
+        r = await client.post(
+            "/admin/tokens",
+            json={
+                "label": "PIN Token",
+                "entity_ids": ["light.living_room"],
+                "expires_in_seconds": 86400,
+                "pin": "1234",
+            },
+            cookies=admin_session,
+        )
+        token = r.json()
+
+        # Try old-style base64 encoded PIN
+        encoded = base64.urlsafe_b64encode(b"1234").decode().rstrip("=")
+        r = await client.get(f"/g/{token['slug']}?t={encoded}")
+        assert r.status_code == 200
+        # Should show PIN page (old parameter no longer works)
+        assert b"Enter PIN" in r.content
 
     async def test_no_pin_bypasses_check(self, client, admin_session, mock_ha_client):
         """Token without PIN allows direct access."""
@@ -257,11 +284,11 @@ class TestTokenPinPreStartExpired:
         assert b"Enter PIN" not in r.content
 
 
-class TestTokenPinQueryParameter:
-    """Tests for PIN in query parameter."""
+class TestAccessCodeReuse:
+    """Tests for access code reusability."""
 
-    async def test_pin_query_parameter_variants(self, client, admin_session, mock_ha_client):
-        """PIN can be passed via query parameter with padding variations."""
+    async def test_access_code_reusable_multiple_times(self, client, admin_session, mock_ha_client):
+        """Same access code works multiple times."""
         r = await client.post(
             "/admin/tokens",
             json={
@@ -274,11 +301,22 @@ class TestTokenPinQueryParameter:
         )
         token = r.json()
 
-        # Test various encodings
-        for encoded in ["MTIzNA", "MTIzNA==", "MTIzNA==="]:
-            r = await client.get(f"/g/{token['slug']}?t={encoded}")
+        # Generate access code
+        r = await client.post(
+            f"/admin/tokens/{token['id']}/access-code",
+            json={"pin": "1234"},
+            cookies=admin_session,
+        )
+        access_code = r.json()["access_code"]
+
+        # Use access code multiple times
+        for _ in range(3):
+            # Each use gets its own session
+            r = await client.get(
+                f"/g/{token['slug']}?c={access_code}",
+                follow_redirects=True
+            )
             assert r.status_code == 200
-            # Should allow access
             assert b"Enter PIN" not in r.content
 
 

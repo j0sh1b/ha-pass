@@ -62,6 +62,10 @@ class TokenUpdatePinRequest(BaseModel):
     pin: str | None = Field(default=None, max_length=20)
 
 
+class AccessCodeRequest(BaseModel):
+    pin: str = Field(..., max_length=20)
+
+
 class CommandRequest(BaseModel):
     entity_id: str
     service: str  # e.g. "light.turn_on"
