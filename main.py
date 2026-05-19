@@ -110,7 +110,8 @@ async def security_headers(request: Request, call_next):
     # API docs needs CDN resources for Swagger UI
     is_api_docs = request.url.path.endswith("/api/docs") or request.url.path.endswith("/api/docs/")
     if is_api_docs:
-        script_src = f"'self' 'nonce-{nonce}' https://cdn.jsdelivr.net"
+        # Swagger UI has inline scripts that can't be nonced, so we allow unsafe-inline
+        script_src = f"'self' 'unsafe-inline' https://cdn.jsdelivr.net"
         style_src = "'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net"
         img_src = "'self' data: https://fastapi.tiangolo.com"
     else:
