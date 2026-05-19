@@ -129,6 +129,11 @@ async def security_headers(request: Request, call_next):
     request.state.csp_nonce = nonce
     # Get ingress_path from request state (set by set_root_path middleware)
     ingress_path = getattr(request.state, "ingress_path", "")
+    
+    # Debug logging
+    if "/admin" in request.url.path:
+        logger.info("CSP_DEBUG: path=%s ingress_path=%s", request.url.path, ingress_path)
+    
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "no-referrer"
