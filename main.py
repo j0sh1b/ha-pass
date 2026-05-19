@@ -137,20 +137,28 @@ async def security_headers(request: Request, call_next):
         style_src = "'self' 'unsafe-inline' https://fonts.googleapis.com"
         img_src = "'self' data:"
     if ingress_path:
-        # Ingress loads inside HA iframe — allow framing from same origin
-        frame_ancestors = "frame-ancestors 'self'"
+        # Ingress loads inside HA iframe — allow framing from anywhere since
+        # HA's ingress proxy already provides authentication/authorization.
+        # Omit frame-ancestors entirely for ingress mode to allow embedding.
+        csp = (
+            f"default-src 'self'; "
+            f"script-src {script_src}; "
+            f"style-src {style_src}; "
+            f"font-src https://fonts.gstatic.com; "
+            f"img-src {img_src}; "
+            f"connect-src 'self'"
+        )
     else:
         response.headers["X-Frame-Options"] = "DENY"
-        frame_ancestors = "frame-ancestors 'none'"
-    csp = (
-        f"default-src 'self'; "
-        f"script-src {script_src}; "
-        f"style-src {style_src}; "
-        f"font-src https://fonts.gstatic.com; "
-        f"img-src {img_src}; "
-        f"connect-src 'self'; "
-        f"{frame_ancestors}"
-    )
+        csp = (
+            f"default-src 'self'; "
+            f"script-src {script_src}; "
+            f"style-src {style_src}; "
+            f"font-src https://fonts.gstatic.com; "
+            f"img-src {img_src}; "
+            f"connect-src 'self'; "
+            f"frame-ancestors 'none'"
+        )
     response.headers["Content-Security-Policy"] = csp
     # Prevent browser from caching HTML responses (avoids stale JS after deploys)
     content_type = response.headers.get("content-type", "")
