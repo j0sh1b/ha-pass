@@ -141,6 +141,15 @@ async def security_headers(request: Request, call_next):
     return response
 
 
+@app.middleware("http")
+async def set_root_path(request: Request, call_next):
+    """Set root_path for ingress so FastAPI generates correct URLs in Swagger UI."""
+    ingress_path = getattr(request.state, "ingress_path", "")
+    if ingress_path:
+        request.scope["root_path"] = ingress_path
+    return await call_next(request)
+
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(admin.router)
 app.include_router(guest.router)
